@@ -77,7 +77,7 @@ class _GamesScreenState extends State<GamesScreen> {
               ),
               const SizedBox(width: 12),
               const Text(
-                'Namaste, User',
+                'Namaste, Rahul Kumar',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
