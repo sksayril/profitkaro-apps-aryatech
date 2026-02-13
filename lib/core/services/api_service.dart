@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'device_service.dart';
 
 class ApiService {
   // static const String baseUrl = 'https://apiprofit.seotube.in';
@@ -14,9 +15,13 @@ class ApiService {
     String? referralCode,
   }) async {
     try {
+      // Get device ID automatically in the background
+      final deviceId = await DeviceService.getDeviceId();
+      
       final requestBody = {
         'MobileNumber': mobileNumber,
         'Password': password,
+        'DeviceId': deviceId,
       };
       
       // Add referral code only if provided
@@ -62,6 +67,9 @@ class ApiService {
     required String password,
   }) async {
     try {
+      // Get device ID automatically in the background
+      final deviceId = await DeviceService.getDeviceId();
+      
       final response = await http.post(
         Uri.parse('$baseUrl/users/login'),
         headers: {
@@ -70,6 +78,7 @@ class ApiService {
         body: jsonEncode({
           'MobileNumber': mobileNumber,
           'Password': password,
+          'DeviceId': deviceId,
         }),
       );
 

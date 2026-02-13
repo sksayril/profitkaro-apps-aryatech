@@ -6,8 +6,7 @@ import '../../widgets/home/header_widget.dart';
 import '../../widgets/home/balance_card.dart';
 import '../../widgets/home/hot_offers_section.dart';
 import '../../widgets/home/earn_money_section.dart';
-import '../../widgets/home/daily_bonus_card.dart';
-import '../../widgets/home/refer_earn_card.dart';
+import '../../widgets/home/quick_actions_row.dart'; // New Import
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -122,14 +121,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     coins: _coins,
                     isLoading: _isLoading,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
 
-                  // Daily Bonus Card
-                  const DailyBonusCard(),
-                  const SizedBox(height: 16),
-
-                  // Refer & Earn Card
-                  const ReferEarnCard(),
+                  // Quick Actions Row (Claim Bonus, Daily Deals, Refer & Earn)
+                  const QuickActionsRow(),
                   const SizedBox(height: 24),
 
                   // Hot Offers Section

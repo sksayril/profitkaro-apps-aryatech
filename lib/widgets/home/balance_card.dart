@@ -92,105 +92,247 @@ class _BalanceCardState extends State<BalanceCard>
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(20),
+  Widget _buildDecorationCircles() {
+    return Positioned(
+      right: -40,
+      top: -40,
+      child: Container(
+        height: 200,
+        width: 200,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withOpacity(0.1),
+        ),
       ),
-      child: Column(
+    );
+  }
+
+  Widget _buildCoinStack() {
+    return SizedBox(
+      height: 120,
+      width: 100,
+      child: Stack(
+        alignment: Alignment.bottomCenter,
         children: [
-          // Total Balance label centered
-          Text(
-            'Total Balance',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.9),
-              fontSize: 14,
-              fontWeight: FontWeight.w400,
+          // Base coins
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: Transform.rotate(
+              angle: 0.2,
+              child: Icon(Icons.monetization_on, size: 50, color: Colors.amber[800]),
             ),
           ),
-          const SizedBox(height: 8),
-          // Amount centered
-          widget.isLoading
-              ? _buildSkeletonLoader()
-              : Text(
-                  _formatCurrency(widget.walletBalance),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
+          Positioned(
+            bottom: 0,
+            left: 5,
+            child: Transform.rotate(
+              angle: -0.2,
+              child: Icon(Icons.monetization_on, size: 50, color: Colors.amber[800]),
+            ),
+          ),
+          // Middle layer
+          Positioned(
+            bottom: 15,
+            right: 15,
+            child: Icon(Icons.monetization_on, size: 50, color: Colors.amber[600]),
+          ),
+          Positioned(
+            bottom: 15,
+            left: 15,
+            child: Icon(Icons.monetization_on, size: 50, color: Colors.amber[600]),
+          ),
+          // Top coin
+          Positioned(
+            bottom: 35,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.amber.withOpacity(0.5),
+                    blurRadius: 10,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Icon(Icons.monetization_on, size: 55, color: Colors.amber[400]),
+            ),
+          ),
+          // Sparkles
+          Positioned(
+            top: 10,
+            right: 10,
+            child: Icon(Icons.auto_awesome, size: 24, color: Colors.yellow[200]),
+          ),
+          Positioned(
+            bottom: 40,
+            left: 0,
+            child: Icon(Icons.star, size: 16, color: Colors.white.withOpacity(0.8)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Estimate Dollar value (approx rate)
+    final double dollarValue = widget.walletBalance / 84.0;
+    
+    return Container(
+      width: double.infinity,
+      height: 200, // Fixed height for consistent look
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4A90E2), Color(0xFF0055FF)], // Brighter blue gradient
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0055FF).withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Decorative background circles
+          _buildDecorationCircles(),
+          Positioned(
+            bottom: -20,
+            right: 60,
+            child: Container(
+              height: 100,
+              width: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.05),
+              ),
+            ),
+          ),
+
+          // Illustration on the right
+          Positioned(
+            right: 20,
+            bottom: 20,
+            child: widget.isLoading ? const SizedBox.shrink() : _buildCoinStack(),
+          ),
+
+          // Content
+          Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Header
+                Text(
+                  'BALANCE',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1.2,
                   ),
                 ),
-          const SizedBox(height: 12),
-          // Daily earnings indicator - pill shaped, light blue
-          widget.isLoading
-              ? const SizedBox.shrink()
-              : Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6BA3D6).withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                
+                // Main Balance (Coins)
+                widget.isLoading
+                ? _buildSkeletonLoader()
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Chart icon
-                      Icon(
-                        Icons.show_chart,
-                        color: Colors.white.withOpacity(0.9),
-                        size: 16,
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.monetization_on_outlined, 
+                              color: Colors.white, 
+                              size: 20
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            // Display coins with decimals to match UI style "503.00000"
+                            '${widget.coins}.00000',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      // Green text for earnings
-                      const Text(
-                        '+₹120 Today',
+                      const SizedBox(height: 8),
+                      // Secondary Balance (Rupees | Dollars)
+                      Text(
+                        '${_formatCurrency(widget.walletBalance)} | \$ ${dollarValue.toStringAsFixed(2)}',
                         style: TextStyle(
-                          color: AppColors.green,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withOpacity(0.8),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
-                ),
-          const SizedBox(height: 20),
-          // Withdraw button - white pill
-          GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const WalletScreen()),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Withdraw',
-                    style: TextStyle(
-                      color: Color(0xFF1E3A5F),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+
+                // Action Button (Wallet)
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const WalletScreen()),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.account_balance_wallet,
+                          color: Color(0xFF0055FF),
+                          size: 18,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Wallet',
+                          style: TextStyle(
+                            color: Color(0xFF0055FF),
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  SizedBox(width: 8),
-                  Icon(
-                    Icons.arrow_forward,
-                    color: Color(0xFF1E3A5F),
-                    size: 20,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],

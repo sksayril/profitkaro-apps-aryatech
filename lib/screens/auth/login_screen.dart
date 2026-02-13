@@ -144,23 +144,34 @@ class _LoginScreenState extends State<LoginScreen> {
                     
                     // Authentication Buttons - Flexible to take remaining space
                     Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (!_showLoginInput && !_showSignupOption) ...[
-                            // Mobile Number Login Button
-                            _buildMobileLoginButton(),
-                            const SizedBox(height: 16),
-                            // Guest Explore
-                            _buildGuestExplore(),
-                          ] else if (_showLoginInput) ...[
-                            // Login Input Form
-                            _buildLoginInput(),
-                          ] else if (_showSignupOption) ...[
-                            // Signup Option - show choice between login and signup
-                            _buildMobileAuthChoice(),
-                          ],
-                        ],
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: constraints.maxHeight,
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (!_showLoginInput && !_showSignupOption) ...[
+                                    // Mobile Number Login Button
+                                    _buildMobileLoginButton(),
+                                    const SizedBox(height: 16),
+                                    // Guest Explore
+                                    _buildGuestExplore(),
+                                  ] else if (_showLoginInput) ...[
+                                    // Login Input Form
+                                    _buildLoginInput(),
+                                  ] else if (_showSignupOption) ...[
+                                    // Signup Option - show choice between login and signup
+                                    _buildMobileAuthChoice(),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                     
