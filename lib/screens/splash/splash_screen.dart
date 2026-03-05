@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/storage_service.dart';
+import '../../core/services/update_service.dart';
+import '../../core/services/referral_service.dart';
+import '../../core/services/deep_link_service.dart';
 import '../main_screen.dart';
-import '../auth/login_screen.dart';
+import '../auth/signup_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -32,7 +36,13 @@ class _SplashScreenState extends State<SplashScreen>
     
     _controller.forward();
     
-    // Navigate to login or main screen after 3 seconds
+    // Check for app updates silently during splash
+    UpdateService.checkForUpdateSilently();
+    
+    // Check for referral code in initial route (for deep linking)
+    _checkForReferralCode();
+    
+    // Navigate to signup or main screen after 3 seconds
     Timer(const Duration(seconds: 3), () async {
       if (mounted) {
         final isLoggedIn = await StorageService.isLoggedIn();
@@ -41,11 +51,25 @@ class _SplashScreenState extends State<SplashScreen>
           MaterialPageRoute(
             builder: (context) => isLoggedIn 
                 ? const MainScreen() 
-                : const LoginScreen(),
+                : const SignupScreen(),
           ),
         );
       }
     });
+  }
+
+  Future<void> _checkForReferralCode() async {
+    // Check for referral code from deep link
+    final deepLinkService = DeepLinkService();
+    final initialLink = deepLinkService.getInitialLink();
+    
+    if (initialLink != null) {
+      final url = initialLink.toString();
+      await ReferralService.processReferralCodeFromUrl(url);
+      if (kDebugMode) {
+        print('Splash: Processed referral code from deep link: $url');
+      }
+    }
   }
 
   @override
@@ -137,7 +161,7 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             ),
             child: Icon(
-              Icons.attach_money,
+              Icons.payments,
               size: 24,
               color: Colors.grey.shade600.withOpacity(0.3),
             ),

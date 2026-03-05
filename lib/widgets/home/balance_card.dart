@@ -20,8 +20,11 @@ class BalanceCard extends StatefulWidget {
 }
 
 class _BalanceCardState extends State<BalanceCard>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _shimmerController;
+  AnimationController? _treeAnimationController;
+  Animation<double>? _treeScaleAnimation;
+  Animation<double>? _treeRotationAnimation;
 
   @override
   void initState() {
@@ -30,11 +33,36 @@ class _BalanceCardState extends State<BalanceCard>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat();
+    
+    // Tree animation controller
+    _treeAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+    
+    // Tree scale animation (breathing effect)
+    _treeScaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.15,
+    ).animate(CurvedAnimation(
+      parent: _treeAnimationController!,
+      curve: Curves.easeInOut,
+    ));
+    
+    // Tree rotation animation (gentle sway)
+    _treeRotationAnimation = Tween<double>(
+      begin: -0.05,
+      end: 0.05,
+    ).animate(CurvedAnimation(
+      parent: _treeAnimationController!,
+      curve: Curves.easeInOut,
+    ));
   }
 
   @override
   void dispose() {
     _shimmerController.dispose();
+    _treeAnimationController?.dispose();
     super.dispose();
   }
 
@@ -92,83 +120,59 @@ class _BalanceCardState extends State<BalanceCard>
     );
   }
 
-  Widget _buildDecorationCircles() {
-    return Positioned(
-      right: -40,
-      top: -40,
-      child: Container(
-        height: 200,
-        width: 200,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white.withOpacity(0.1),
-        ),
-      ),
-    );
-  }
 
-  Widget _buildCoinStack() {
+
+  Widget _buildIllustration() {
     return SizedBox(
-      height: 120,
-      width: 100,
+      height: 150,
+      width: 160,
       child: Stack(
-        alignment: Alignment.bottomCenter,
+        alignment: Alignment.center,
         children: [
-          // Base coins
+          // Background Glow
           Positioned(
-            bottom: 0,
-            right: 0,
-            child: Transform.rotate(
-              angle: 0.2,
-              child: Icon(Icons.monetization_on, size: 50, color: Colors.amber[800]),
-            ),
-          ),
-          Positioned(
-            bottom: 0,
-            left: 5,
-            child: Transform.rotate(
-              angle: -0.2,
-              child: Icon(Icons.monetization_on, size: 50, color: Colors.amber[800]),
-            ),
-          ),
-          // Middle layer
-          Positioned(
-            bottom: 15,
-            right: 15,
-            child: Icon(Icons.monetization_on, size: 50, color: Colors.amber[600]),
-          ),
-          Positioned(
-            bottom: 15,
-            left: 15,
-            child: Icon(Icons.monetization_on, size: 50, color: Colors.amber[600]),
-          ),
-          // Top coin
-          Positioned(
-            bottom: 35,
+            right: 20,
+            bottom: 20,
             child: Container(
+              height: 100,
+              width: 100,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.amber.withOpacity(0.5),
-                    blurRadius: 10,
-                    spreadRadius: 2,
+                    color: Colors.white.withOpacity(0.2),
+                    blurRadius: 50,
+                    spreadRadius: 5,
                   ),
                 ],
               ),
-              child: Icon(Icons.monetization_on, size: 55, color: Colors.amber[400]),
             ),
           ),
-          // Sparkles
+
+          // 500 Notes Bundle - Premium Large View
           Positioned(
-            top: 10,
             right: 10,
-            child: Icon(Icons.auto_awesome, size: 24, color: Colors.yellow[200]),
+            bottom: 10,
+            child: Transform.rotate(
+              angle: -0.15,
+              child: Image.asset(
+                'assets/images/500notes.png',
+                width: 130,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+
+          // Secondary Sparkles
+          const Positioned(
+            top: 30,
+            right: 40,
+            child: Icon(Icons.auto_awesome, color: Colors.white, size: 20),
           ),
           Positioned(
             bottom: 40,
-            left: 0,
-            child: Icon(Icons.star, size: 16, color: Colors.white.withOpacity(0.8)),
+            right: 10,
+            child: Icon(Icons.star, color: Colors.white.withOpacity(0.6), size: 14),
           ),
         ],
       ),
@@ -177,22 +181,20 @@ class _BalanceCardState extends State<BalanceCard>
 
   @override
   Widget build(BuildContext context) {
-    // Estimate Dollar value (approx rate)
-    final double dollarValue = widget.walletBalance / 84.0;
-    
     return Container(
       width: double.infinity,
-      height: 200, // Fixed height for consistent look
+      height: 200,
       decoration: BoxDecoration(
+        color: const Color(0xFF2962FF), // Base blue color
         gradient: const LinearGradient(
-          colors: [Color(0xFF4A90E2), Color(0xFF0055FF)], // Brighter blue gradient
+          colors: [Color(0xFF42A5F5), Color(0xFF2962FF)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0055FF).withOpacity(0.3),
+            color: const Color(0xFF2962FF).withOpacity(0.3),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -200,26 +202,21 @@ class _BalanceCardState extends State<BalanceCard>
       ),
       child: Stack(
         children: [
-          // Decorative background circles
-          _buildDecorationCircles(),
-          Positioned(
-            bottom: -20,
-            right: 60,
-            child: Container(
-              height: 100,
-              width: 100,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.05),
-              ),
-            ),
+          // Wave Background Decoration
+          Positioned.fill(
+             child: ClipRRect(
+               borderRadius: BorderRadius.circular(24),
+               child: CustomPaint(
+                 painter: _BalanceCardBackgroundPainter(),
+               ),
+             ),
           ),
 
           // Illustration on the right
           Positioned(
-            right: 20,
-            bottom: 20,
-            child: widget.isLoading ? const SizedBox.shrink() : _buildCoinStack(),
+            right: 0,
+            bottom: 10,
+            child: widget.isLoading ? const SizedBox.shrink() : _buildIllustration(),
           ),
 
           // Content
@@ -235,8 +232,8 @@ class _BalanceCardState extends State<BalanceCard>
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.9),
                     fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.0,
                   ),
                 ),
                 
@@ -248,29 +245,68 @@ class _BalanceCardState extends State<BalanceCard>
                     children: [
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
+                          _treeAnimationController != null && 
+                          _treeScaleAnimation != null && 
+                          _treeRotationAnimation != null
+                          ? AnimatedBuilder(
+                              animation: _treeAnimationController!,
+                              builder: (context, child) {
+                                return Transform.scale(
+                                  scale: _treeScaleAnimation!.value,
+                                  child: Transform.rotate(
+                                    angle: _treeRotationAnimation!.value,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Colors.white,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.1),
+                                            blurRadius: 8,
+                                            spreadRadius: 1,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Text(
+                                        '🌴',
+                                        style: TextStyle(
+                                          fontSize: 28,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          : Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 8,
+                                    spreadRadius: 1,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Text(
+                                '🌴',
+                                style: TextStyle(
+                                  fontSize: 28,
+                                ),
                               ),
                             ),
-                            child: const Icon(
-                              Icons.monetization_on_outlined, 
-                              color: Colors.white, 
-                              size: 20
-                            ),
-                          ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 8),
                           Text(
-                            // Display coins with decimals to match UI style "503.00000"
-                            '${widget.coins}.00000',
+                            '${widget.coins}.00',
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 28,
+                              fontSize: 32, // Larger font
                               fontWeight: FontWeight.bold,
                               letterSpacing: 0.5,
                             ),
@@ -278,11 +314,11 @@ class _BalanceCardState extends State<BalanceCard>
                         ],
                       ),
                       const SizedBox(height: 8),
-                      // Secondary Balance (Rupees | Dollars)
+                      // Secondary Balance (Rupees)
                       Text(
-                        '${_formatCurrency(widget.walletBalance)} | \$ ${dollarValue.toStringAsFixed(2)}',
+                        _formatCurrency(widget.walletBalance),
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
+                          color: Colors.white.withValues(alpha: 0.9),
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
                         ),
@@ -299,7 +335,7 @@ class _BalanceCardState extends State<BalanceCard>
                     );
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(30),
@@ -316,15 +352,15 @@ class _BalanceCardState extends State<BalanceCard>
                       children: [
                         Icon(
                           Icons.account_balance_wallet,
-                          color: Color(0xFF0055FF),
-                          size: 18,
+                          color: Color(0xFF2962FF),
+                          size: 20,
                         ),
                         SizedBox(width: 8),
                         Text(
                           'Wallet',
                           style: TextStyle(
-                            color: Color(0xFF0055FF),
-                            fontSize: 14,
+                            color: Color(0xFF2962FF),
+                            fontSize: 15,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -339,4 +375,39 @@ class _BalanceCardState extends State<BalanceCard>
       ),
     );
   }
+}
+
+class _BalanceCardBackgroundPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withOpacity(0.1)
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    path.moveTo(size.width * 0.4, 0);
+    path.quadraticBezierTo(
+      size.width * 0.7,
+      size.height * 0.5,
+      size.width,
+      size.height * 0.3,
+    );
+    path.lineTo(size.width, 0);
+    path.close();
+
+    canvas.drawPath(path, paint);
+
+    final paint2 = Paint()
+      ..color = Colors.white.withOpacity(0.05)
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(
+      Offset(size.width * 0.8, size.height * 0.8),
+      100,
+      paint2,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

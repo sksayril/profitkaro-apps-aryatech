@@ -54,7 +54,7 @@ class _MusicScreenState extends State<MusicScreen> {
                   ),
                   child: const Center(
                     child: Text(
-                      '\$',
+                      '₹',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 12,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
@@ -21,6 +22,12 @@ class WalletScreen extends StatefulWidget {
 }
 
 class _WalletScreenState extends State<WalletScreen> {
+  // AdMob Configuration
+  static const String _rewardedAdUnitId = 'ca-app-pub-4532355113190688/5923175121';
+  RewardedAd? _rewardedAd;
+  bool _isAdLoaded = false;
+  bool _isAdLoading = false;
+  
   int _selectedCurrencyTab = 0;
   int _selectedPaymentMethod = 0;
   double _walletBalance = 0.0;
@@ -39,6 +46,106 @@ class _WalletScreenState extends State<WalletScreen> {
   final _formKey = GlobalKey<FormState>();
 
   @override
+  void initState() {
+    super.initState();
+    _fetchWalletBalance();
+    _fetchWithdrawalRequests();
+    _initializeAds();
+  }
+
+  void _initializeAds() {
+    MobileAds.instance.initialize().then((status) {
+      _loadRewardedAd();
+    });
+  }
+
+  void _loadRewardedAd() {
+    if (_isAdLoading) return;
+    
+    setState(() {
+      _isAdLoading = true;
+      _isAdLoaded = false;
+    });
+
+    RewardedAd.load(
+      adUnitId: _rewardedAdUnitId,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (RewardedAd ad) {
+          if (mounted) {
+            setState(() {
+              _rewardedAd = ad;
+              _isAdLoaded = true;
+              _isAdLoading = false;
+            });
+            
+            _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
+              onAdDismissedFullScreenContent: (RewardedAd ad) {
+                ad.dispose();
+                if (mounted) {
+                  setState(() {
+                    _rewardedAd = null;
+                    _isAdLoaded = false;
+                  });
+                  _loadRewardedAd();
+                }
+              },
+              onAdFailedToShowFullScreenContent: (RewardedAd ad, AdError error) {
+                ad.dispose();
+                if (mounted) {
+                  setState(() {
+                    _rewardedAd = null;
+                    _isAdLoaded = false;
+                  });
+                  Future.delayed(const Duration(seconds: 2), () {
+                    if (mounted) {
+                      _loadRewardedAd();
+                    }
+                  });
+                }
+              },
+            );
+          }
+        },
+        onAdFailedToLoad: (LoadAdError error) {
+          if (mounted) {
+            setState(() {
+              _isAdLoading = false;
+              _isAdLoaded = false;
+            });
+          }
+        },
+      ),
+    );
+  }
+
+  void _showRewardedAd({required VoidCallback onAdWatched}) {
+    if (_rewardedAd != null && _isAdLoaded) {
+      _rewardedAd!.show(
+        onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
+          // Ad watched successfully
+          onAdWatched();
+        },
+      );
+    } else {
+      // Ad not loaded, try to load it first
+      if (!_isAdLoading) {
+        _loadRewardedAd();
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ad is loading. Please wait...'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _amountController.dispose();
     _upiIdController.dispose();
@@ -47,18 +154,12 @@ class _WalletScreenState extends State<WalletScreen> {
     _bankIFSCController.dispose();
     _bankNameController.dispose();
     _accountHolderController.dispose();
+    _rewardedAd?.dispose();
     super.dispose();
   }
 
   List<Map<String, dynamic>> _withdrawalRequests = [];
   bool _isLoadingRequests = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchWalletBalance();
-    _fetchWithdrawalRequests();
-  }
 
   Future<void> _fetchWalletBalance() async {
     setState(() {
@@ -352,6 +453,16 @@ class _WalletScreenState extends State<WalletScreen> {
       }
     }
 
+    // Show rewarded ad before submitting withdrawal request
+    _showRewardedAd(
+      onAdWatched: () {
+        // After ad is watched, proceed with withdrawal submission
+        _processWithdrawalRequest(amount, paymentMethod);
+      },
+    );
+  }
+
+  Future<void> _processWithdrawalRequest(double amount, String paymentMethod) async {
     setState(() {
       _isSubmitting = true;
     });

@@ -444,7 +444,7 @@ class _TaskOffersScreenState extends State<TaskOffersScreen> with SingleTickerPr
                       ),
                       child: const Center(
                         child: Text(
-                          '\$',
+                          '₹',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 10,

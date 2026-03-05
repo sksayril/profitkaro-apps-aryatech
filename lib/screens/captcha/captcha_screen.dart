@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:math' as math;
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
+import '../../widgets/coin_reward_popup.dart';
 
 class CaptchaScreen extends StatefulWidget {
   const CaptchaScreen({super.key});
@@ -21,16 +24,165 @@ class _CaptchaScreenState extends State<CaptchaScreen> {
   double _rewardAmount = 0.0;
   String _rewardType = 'Coins';
   bool _isLoadingProgress = true;
+  
+  // AdMob Configuration
+  static const String _rewardedAdUnitId = 'ca-app-pub-4532355113190688/5923175121';
+  RewardedAd? _rewardedAd;
+  bool _isAdLoaded = false;
+  bool _isAdLoading = false;
+  
+  // Track captcha count for alternating ads pattern (1st = Ads, 2nd & 3rd = Skip, 4th = Ads, etc.)
+  int _captchaCount = 0; // Track total captchas solved
+  
+  // Store captcha input for after ads
+  String _pendingCaptchaInput = '';
 
   @override
   void initState() {
     super.initState();
+    _loadCaptchaCount();
+    _initializeAds();
     _fetchCaptcha();
     _fetchProgress();
   }
 
+  void _initializeAds() {
+    MobileAds.instance.initialize().then((status) {
+      _loadRewardedAd();
+    });
+  }
+
+  void _loadRewardedAd() {
+    if (_isAdLoading) return;
+    
+    setState(() {
+      _isAdLoading = true;
+      _isAdLoaded = false;
+    });
+
+    RewardedAd.load(
+      adUnitId: _rewardedAdUnitId,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (RewardedAd ad) {
+          setState(() {
+            _rewardedAd = ad;
+            _isAdLoaded = true;
+            _isAdLoading = false;
+          });
+          
+          _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (RewardedAd ad) {
+              ad.dispose();
+              _rewardedAd = null;
+              _isAdLoaded = false;
+              _loadRewardedAd();
+            },
+            onAdFailedToShowFullScreenContent: (RewardedAd ad, AdError error) {
+              ad.dispose();
+              _rewardedAd = null;
+              _isAdLoaded = false;
+              _loadRewardedAd();
+            },
+          );
+        },
+        onAdFailedToLoad: (LoadAdError error) {
+          setState(() {
+            _isAdLoading = false;
+            _isAdLoaded = false;
+          });
+        },
+      ),
+    );
+  }
+
+  Future<void> _loadCaptchaCount() async {
+    final count = await StorageService.getInt('captcha_count');
+    setState(() {
+      _captchaCount = count ?? 0;
+    });
+  }
+
+  Future<void> _saveCaptchaCount(int count) async {
+    await StorageService.saveInt('captcha_count', count);
+    setState(() {
+      _captchaCount = count;
+    });
+  }
+
+  // Check if current captcha should show ad (pattern: 1 Ads + 2 Skip)
+  // 1st = Ads, 2nd & 3rd = Skip, 4th = Ads, 5th & 6th = Skip, etc.
+  bool _shouldShowAd() {
+    // Pattern: count % 3 == 0 means show ad (1st, 4th, 7th, etc.)
+    return (_captchaCount % 3 == 0);
+  }
+
+  void _showRewardedAd({required VoidCallback onAdWatched}) async {
+    // If ad is not loaded, try to load it first
+    if (!_isAdLoaded && !_isAdLoading) {
+      _loadRewardedAd();
+      // Wait for ad to load (with timeout)
+      int waitCount = 0;
+      while (!_isAdLoaded && waitCount < 30 && mounted) {
+        await Future.delayed(const Duration(milliseconds: 200));
+        waitCount++;
+      }
+    }
+    
+    if (_rewardedAd != null && _isAdLoaded) {
+      // Ad is loaded and ready, show it
+      _rewardedAd!.show(
+        onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
+          // User watched ad, proceed with captcha processing
+          onAdWatched();
+        },
+      );
+    } else {
+      // Ad not loaded, show loading message and wait
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Loading ad... Please wait'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        
+        // Try to load ad and wait
+        if (!_isAdLoading) {
+          _loadRewardedAd();
+        }
+        
+        // Wait for ad to load (with timeout)
+        int waitCount = 0;
+        while (!_isAdLoaded && waitCount < 30 && mounted) {
+          await Future.delayed(const Duration(milliseconds: 200));
+          waitCount++;
+        }
+        
+        // If ad loaded, show it
+        if (_rewardedAd != null && _isAdLoaded && mounted) {
+          _rewardedAd!.show(
+            onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
+              onAdWatched();
+            },
+          );
+        } else {
+          // Ad still not ready after waiting, proceed anyway
+          if (mounted) {
+            onAdWatched();
+          }
+        }
+      } else {
+        // Not mounted, but still proceed
+        onAdWatched();
+      }
+    }
+  }
+
   @override
   void dispose() {
+    _rewardedAd?.dispose();
     _captchaController.dispose();
     super.dispose();
   }
@@ -109,6 +261,26 @@ class _CaptchaScreenState extends State<CaptchaScreen> {
       return;
     }
 
+    // Store captcha input for after ads
+    _pendingCaptchaInput = captchaInput;
+
+    // Check if we should show ad based on alternating pattern
+    // Pattern: 1st = Ads, 2nd & 3rd = Skip, 4th = Ads, 5th & 6th = Skip, etc.
+    if (_shouldShowAd()) {
+      // Show rewarded ad (for 1st, 4th, 7th, etc.)
+      _showRewardedAd(
+        onAdWatched: () {
+          // After ad is watched, process captcha and give coins
+          _processCaptchaAndAwardCoins();
+        },
+      );
+    } else {
+      // Skip ad (for 2nd, 3rd, 5th, 6th, etc.) - directly process captcha
+      _processCaptchaAndAwardCoins();
+    }
+  }
+
+  Future<void> _processCaptchaAndAwardCoins() async {
     setState(() {
       _isSubmitting = true;
     });
@@ -122,35 +294,36 @@ class _CaptchaScreenState extends State<CaptchaScreen> {
         return;
       }
 
+      // First, submit captcha
       final result = await ApiService.solveCaptcha(
         token: token,
-        captcha: captchaInput,
+        captcha: _pendingCaptchaInput,
       );
 
       if (result['success'] && result['data'] != null) {
         final data = result['data'];
         setState(() {
-          // Update progress from response
           _todaySolves = data['TodaySolves'] ?? 0;
           _dailyLimit = data['DailyLimit'] ?? 10;
-          _rewardAmount = (data['RewardAmount'] ?? 0).toDouble();
-          _rewardType = data['RewardType'] ?? 'Coins';
         });
+
+        // Generate random coins (1-10)
+        final random = math.Random();
+        final earnedCoins = random.nextInt(10) + 1; // 1 to 10
+
+        // Add coins to wallet via API
+        await _addCoinsToWallet(earnedCoins);
+
+        // Increment captcha count after successful solve
+        final newCount = _captchaCount + 1;
+        _saveCaptchaCount(newCount);
 
         // Clear input and fetch new captcha
         _captchaController.clear();
         _fetchCaptcha();
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Success! You earned ${_rewardType == 'Coins' ? '$_rewardAmount Coins' : '₹$_rewardAmount'}',
-              ),
-              backgroundColor: AppColors.green,
-              duration: const Duration(seconds: 3),
-            ),
-          );
+          _showCoinRewardPopup(earnedCoins);
         }
       } else {
         if (mounted) {
@@ -178,6 +351,62 @@ class _CaptchaScreenState extends State<CaptchaScreen> {
         });
       }
     }
+  }
+
+  Future<void> _addCoinsToWallet(int coins) async {
+    if (coins <= 0) return;
+    
+    try {
+      final token = await StorageService.getToken();
+      if (token == null || token.isEmpty) {
+        return;
+      }
+      
+      final result = await ApiService.addCoins(
+        token: token,
+        coins: coins,
+      );
+      
+      if (result['success'] == true) {
+        // Coins added successfully
+        if (mounted) {
+          setState(() {
+            _rewardAmount = coins.toDouble();
+            _rewardType = 'Coins';
+          });
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Failed to add coins'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error adding coins: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showCoinRewardPopup(int coins) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return CoinRewardPopup(
+          coins: coins,
+        );
+      },
+    );
   }
 
   @override
@@ -409,12 +638,10 @@ class _CaptchaScreenState extends State<CaptchaScreen> {
                           ),
                         ),
                       )
-                    : Center(
+                    : const Center(
                         child: Text(
-                          _rewardType == 'Coins'
-                              ? 'Submit & Earn $_rewardAmount Coins'
-                              : 'Submit & Earn ₹$_rewardAmount',
-                          style: const TextStyle(
+                          'Submit & Earn',
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.bold,

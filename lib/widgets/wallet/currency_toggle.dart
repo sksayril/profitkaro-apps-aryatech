@@ -23,7 +23,7 @@ class CurrencyToggle extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _buildTab(context, 0, 'Rupees (₹)', '₹'),
-          _buildTab(context, 1, 'Coins', '\$', isCoins: true),
+          _buildTab(context, 1, 'Tree', '🌴', isCoins: true),
         ],
       ),
     );
@@ -51,19 +51,10 @@ class CurrencyToggle extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             if (isCoins)
-              Container(
-                padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
-                  color: AppColors.amber,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  symbol,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
+              Text(
+                symbol,
+                style: const TextStyle(
+                  fontSize: 16,
                 ),
               )
             else

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../screens/music/music_screen.dart';
-import '../../screens/surveys/survey_tasks_screen.dart';
-import '../../screens/games/games_screen.dart';
+import '../../screens/math_quiz/math_quiz_screen.dart';
+import '../../screens/scratch_card/scratch_card_daily_limit_screen.dart';
 import '../../screens/captcha/captcha_screen.dart';
 import '../../screens/spin_wheel/spin_wheel_screen.dart';
 import '../../screens/task_offers/task_offers_screen.dart';
@@ -90,15 +90,18 @@ class EarnMoneySection extends StatelessWidget {
           childAspectRatio: 1.15,
           children: [
             EarnMoneyCard(
-              icon: Icons.assignment_outlined,
+              icon: Icons.calculate,
               iconBgColor: AppColors.iconBgBlue,
               iconColor: AppColors.primary,
-              title: 'Surveys',
-              subtitle: 'Up to ₹50',
+              title: 'Math Quiz',
+              subtitle: '5-50 Coins',
               subtitleColor: AppColors.green,
-              isComingSoon: true,
+              isComingSoon: false,
               onTap: () {
-                _showComingSoonDialog(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MathQuizScreen()),
+                );
               },
             ),
             EarnMoneyCard(
@@ -128,15 +131,18 @@ class EarnMoneySection extends StatelessWidget {
               },
             ),
             EarnMoneyCard(
-              icon: Icons.sports_esports_rounded,
+              icon: Icons.card_giftcard_rounded,
               iconBgColor: AppColors.iconBgPink,
               iconColor: AppColors.pink,
-              title: 'Games',
+              title: 'Scratch Card',
               subtitle: 'Play & Win',
-              subtitleColor: Colors.grey.shade500,
-              isComingSoon: true,
+              subtitleColor: AppColors.green,
+              isComingSoon: false,
               onTap: () {
-                _showComingSoonDialog(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ScratchCardDailyLimitScreen()),
+                );
               },
             ),
             EarnMoneyCard(

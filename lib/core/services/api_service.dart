@@ -5,11 +5,12 @@ import 'package:http_parser/http_parser.dart';
 import 'device_service.dart';
 
 class ApiService {
-  // static const String baseUrl = 'https://apiprofit.seotube.in';
-  static const String baseUrl = 'https://7cvccltb-3111.inc1.devtunnels.ms';
+  static const String baseUrl = 'https://apiprofit.seotube.in';
+  // static const String baseUrl = 'https://7cvccltb-3111.inc1.devtunnels.ms';
   
   // Signup endpoint
   static Future<Map<String, dynamic>> signup({
+    required String userName,
     required String mobileNumber,
     required String password,
     String? referralCode,
@@ -19,6 +20,7 @@ class ApiService {
       final deviceId = await DeviceService.getDeviceId();
       
       final requestBody = {
+        'UserName': userName,
         'MobileNumber': mobileNumber,
         'Password': password,
         'DeviceId': deviceId,
@@ -91,6 +93,15 @@ class ApiService {
           'data': data['data'],
           'token': data['token'],
         };
+      } else if (response.statusCode == 403) {
+        // Handle blocked user or device mismatch
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Login failed',
+          'isBlocked': data['isBlocked'] ?? false,
+          'blockedReason': data['blockedReason'],
+          'blockedAt': data['blockedAt'],
+        };
       } else {
         return {
           'success': false,
@@ -126,6 +137,13 @@ class ApiService {
           'success': true,
           'message': data['message'],
           'data': data['data'],
+        };
+      } else if (response.statusCode == 403) {
+         return {
+          'success': false,
+          'message': data['message'],
+          'isBlocked': data['isBlocked'] ?? false,
+          'blockedReason': data['blockedReason'],
         };
       } else {
         return {
@@ -454,6 +472,15 @@ class ApiService {
           'success': true,
           'message': data['message'],
           'data': data['data'],
+        };
+      } else if (response.statusCode == 403) {
+        // Handle blocked user
+         return {
+          'success': false,
+          'message': data['message'],
+          'isBlocked': data['isBlocked'] ?? false,
+          'blockedReason': data['blockedReason'],
+          'blockedAt': data['blockedAt'],
         };
       } else {
         return {
@@ -871,6 +898,93 @@ class ApiService {
     }
   }
 
+  // Get scratch card daily limit info
+  static Future<Map<String, dynamic>> getScratchCardDailyLimit({
+    required String token,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/scratchcard/dailylimit'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'],
+          'data': data['data'],
+        };
+      } else if (response.statusCode == 404) {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'User Not Found',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to fetch scratch card daily limit',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Claim scratch card daily limit
+  static Future<Map<String, dynamic>> claimScratchCardDailyLimit({
+    required String token,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/users/scratchcard/dailylimit/claim'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'],
+          'data': data['data'],
+        };
+      } else if (response.statusCode == 400) {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to claim scratch card',
+        };
+      } else if (response.statusCode == 404) {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'User Not Found',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to claim scratch card',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
   // Add coins to user wallet
   static Future<Map<String, dynamic>> addCoins({
     required String token,
@@ -911,6 +1025,75 @@ class ApiService {
     }
   }
 
+  // Get support link (public - no token required)
+  static Future<Map<String, dynamic>> getPublicSupportLink() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/support/link'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'],
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to fetch support link',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Get support link (with token - for authenticated users)
+  static Future<Map<String, dynamic>> getSupportLink({
+    required String token,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/support/link'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'],
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to fetch support link',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
   // Get withdrawal threshold
   static Future<Map<String, dynamic>> getWithdrawalThreshold({
     required String token,
@@ -936,6 +1119,300 @@ class ApiService {
         return {
           'success': false,
           'message': data['message'] ?? 'Failed to fetch withdrawal threshold',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+  // Get top users leaderboard
+  static Future<Map<String, dynamic>> getLeaderboard({
+    required String token,
+    String type = 'wallet',
+    int limit = 50,
+    int page = 1,
+  }) async {
+    try {
+      final queryParams = <String, String>{
+        'type': type,
+        'limit': limit.toString(),
+        'page': page.toString(),
+      };
+
+      final uri = Uri.parse('$baseUrl/users/leaderboard').replace(queryParameters: queryParams);
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'],
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to fetch leaderboard',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Get daily spin status
+  static Future<Map<String, dynamic>> getDailySpinStatus({
+    required String token,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/dailyspin/status'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'],
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to fetch spin status',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Use/record daily spin usage
+  static Future<Map<String, dynamic>> useDailySpin({
+    required String token,
+    int spinCount = 1,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/users/dailyspin/use'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'SpinCount': spinCount,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'],
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to record spin usage',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Get combined wallet & task history
+  static Future<Map<String, dynamic>> getWalletHistory({
+    required String token,
+    int page = 1,
+    int limit = 50,
+    String? type,
+  }) async {
+    try {
+      final queryParams = <String, String>{
+        'page': page.toString(),
+        'limit': limit.toString(),
+      };
+      if (type != null && type.isNotEmpty) {
+        queryParams['type'] = type;
+      }
+
+      final uri = Uri.parse('$baseUrl/users/wallethistory')
+          .replace(queryParameters: queryParams);
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'],
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to fetch wallet history',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Add amount (RS) to user wallet balance
+  static Future<Map<String, dynamic>> addWallet({
+    required String token,
+    required double amount,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/users/addwallet'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'Amount': amount,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'],
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to add wallet balance',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Get signup bonus info endpoint
+  static Future<Map<String, dynamic>> getSignupBonusInfo({
+    required String token,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/signupbonus/info'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+      
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'],
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to fetch signup bonus info',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Submit sponsor promotion request
+  static Future<Map<String, dynamic>> submitSponsorPromotion({
+    required String token,
+    required String sponsorName,
+    required String mobileNumber,
+    required String email,
+    required String appPromotion,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/users/sponsor/promotion'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'SponsorName': sponsorName,
+          'MobileNumber': mobileNumber,
+          'Email': email,
+          'AppPromotion': appPromotion,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Sponsor promotion submitted successfully',
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to submit sponsor promotion',
           'error': data['error'],
         };
       }

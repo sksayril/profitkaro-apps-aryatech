@@ -242,7 +242,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: const [
-                        Icon(Icons.attach_money, color: Colors.white, size: 14),
+                        Text(
+                          '₹',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         SizedBox(width: 4),
                         Text(
                           '+0.05',

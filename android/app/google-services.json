@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "721724373441",
+    "project_id": "profitkaro",
+    "storage_bucket": "profitkaro.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:721724373441:android:81be298402786c104b9740",
+        "android_client_info": {
+          "package_name": "com.profitkaro"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBVI_sV5ZvTtp_5fxLfjFlXehAiAZNlnXM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:async';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
+import '../../core/services/deep_link_service.dart';
+import '../../core/services/referral_service.dart';
 import '../main_screen.dart';
+import 'login_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -13,7 +17,8 @@ class SignupScreen extends StatefulWidget {
   State<SignupScreen> createState() => _SignupScreenState();
 }
 
-class _SignupScreenState extends State<SignupScreen> {
+class _SignupScreenState extends State<SignupScreen> with WidgetsBindingObserver {
+  final TextEditingController _userNameController = TextEditingController();
   final TextEditingController _mobileController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
@@ -24,9 +29,94 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _showConfirmPassword = false;
   bool _acceptTerms = false;
   bool _acceptPrivacy = false;
+  StreamSubscription<Uri>? _deepLinkSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadPendingReferralCode();
+    _setupDeepLinkListener();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // When app comes to foreground, check for new referral codes
+    if (state == AppLifecycleState.resumed) {
+      _loadPendingReferralCode();
+    }
+  }
+
+  Future<void> _loadPendingReferralCode() async {
+    // Check for referral code from storage
+    final pendingCode = await StorageService.getPendingReferralCode();
+    if (pendingCode != null && pendingCode.isNotEmpty && mounted) {
+      setState(() {
+        _referralCodeController.text = pendingCode;
+      });
+    }
+    
+    // Also check for referral code from deep link service
+    final deepLinkService = DeepLinkService();
+    final initialLink = deepLinkService.getInitialLink();
+    final latestLink = deepLinkService.getLatestLink();
+    
+    // Check initial link
+    if (initialLink != null) {
+      final code = ReferralService.extractReferralCodeFromUrl(initialLink.toString());
+      if (code != null && code.isNotEmpty && mounted) {
+        await StorageService.savePendingReferralCode(code);
+        setState(() {
+          _referralCodeController.text = code;
+        });
+      }
+    }
+    
+    // Check latest link (in case app was already running)
+    if (latestLink != null) {
+      final code = ReferralService.extractReferralCodeFromUrl(latestLink.toString());
+      if (code != null && code.isNotEmpty && mounted) {
+        await StorageService.savePendingReferralCode(code);
+        setState(() {
+          _referralCodeController.text = code;
+        });
+      }
+    }
+  }
+
+  void _setupDeepLinkListener() {
+    // Listen for new deep links while signup screen is active
+    final deepLinkService = DeepLinkService();
+    final appLinks = deepLinkService.appLinks;
+    
+    if (appLinks != null) {
+      _deepLinkSubscription = appLinks.uriLinkStream.listen(
+        (Uri uri) {
+          // Extract referral code from new deep link
+          final code = ReferralService.extractReferralCodeFromUrl(uri.toString());
+          if (code != null && code.isNotEmpty && mounted) {
+            StorageService.savePendingReferralCode(code).then((_) {
+              if (mounted) {
+                setState(() {
+                  _referralCodeController.text = code;
+                });
+              }
+            });
+          }
+        },
+        onError: (err) {
+          // Handle error silently
+        },
+      );
+    }
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _deepLinkSubscription?.cancel();
+    _userNameController.dispose();
     _mobileController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -54,20 +144,35 @@ class _SignupScreenState extends State<SignupScreen> {
     });
 
     try {
+      final userName = _userNameController.text.trim();
       final mobileNumber = _mobileController.text.trim();
       final password = _passwordController.text.trim();
       final referralCode = _referralCodeController.text.trim();
 
       final result = await ApiService.signup(
+        userName: userName,
         mobileNumber: mobileNumber,
         password: password,
         referralCode: referralCode.isNotEmpty ? referralCode : null,
       );
 
       if (result['success'] && result['token'] != null) {
-        // Save token and mobile number
+        // Save token, mobile number, and user name
         await StorageService.saveToken(result['token']);
         await StorageService.saveMobileNumber(mobileNumber);
+        
+        // Save user name from response data if available
+        if (result['data'] != null && result['data']['UserName'] != null) {
+          await StorageService.saveUserName(result['data']['UserName']);
+        } else {
+          await StorageService.saveUserName(userName);
+        }
+        
+        // Clear pending referral code after successful signup
+        await StorageService.clearPendingReferralCode();
+        
+        // Reset signup bonus shown flag so new user sees the bonus popup
+        await StorageService.resetSignupBonusShown();
 
         if (mounted) {
           Navigator.pushReplacement(
@@ -378,6 +483,48 @@ class _SignupScreenState extends State<SignupScreen> {
       child: Column(
         children: [
           TextFormField(
+            controller: _userNameController,
+            textCapitalization: TextCapitalization.none,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Enter User Name',
+              hintStyle: TextStyle(color: Colors.grey.shade500),
+              filled: true,
+              fillColor: Colors.grey.shade900.withValues(alpha: 0.5),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: BorderSide(color: Colors.grey.shade700),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: BorderSide(color: Colors.grey.shade700),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: const BorderSide(color: Color(0xFF2196F3), width: 2),
+              ),
+              prefixIcon: const Icon(Icons.person, color: Colors.grey),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter user name';
+              }
+              if (value.length < 3) {
+                return 'User name must be at least 3 characters';
+              }
+              if (value.length > 30) {
+                return 'User name must be less than 30 characters';
+              }
+              // Check for valid characters (alphanumeric and underscore)
+              if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value)) {
+                return 'User name can only contain letters, numbers, and underscore';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
             controller: _mobileController,
             keyboardType: TextInputType.phone,
             inputFormatters: [
@@ -576,7 +723,10 @@ class _SignupScreenState extends State<SignupScreen> {
               ),
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context);
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  );
                 },
                 child: const Text(
                   'Login',

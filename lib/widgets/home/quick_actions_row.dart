@@ -14,8 +14,8 @@ class QuickActionsRow extends StatelessWidget {
         Expanded(
           child: _QuickActionCard(
             title: 'Claim Bonus',
-            color1: const Color(0xFF42A5F5), // Light Blue
-            color2: const Color(0xFF1976D2), // Dark Blue
+            backgroundColor: const Color(0xFFBBDEFB), // Light Blue
+            buttonColor: const Color(0xFF1976D2), // Dark Blue
             onTap: () {
               Navigator.push(
                 context,
@@ -29,8 +29,8 @@ class QuickActionsRow extends StatelessWidget {
         Expanded(
           child: _QuickActionCard(
             title: 'Daily Deals',
-            color1: const Color(0xFF9CCC65), // Light Green
-            color2: const Color(0xFF689F38), // Dark Green
+            backgroundColor: const Color(0xFFDCEDC8), // Light Green
+            buttonColor: const Color(0xFF558B2F), // Dark Green
             onTap: () {
               // Navigate to offers screen as "Daily Deals"
               Navigator.push(
@@ -45,8 +45,8 @@ class QuickActionsRow extends StatelessWidget {
         Expanded(
           child: _QuickActionCard(
             title: 'Refer & Earn',
-            color1: const Color(0xFFFFCC80), // Light Orange
-            color2: const Color(0xFFEF5350), // Red/Pink
+            backgroundColor: const Color(0xFFFFE0B2), // Light Orange
+            buttonColor: const Color(0xFFE64A19), // Dark Orange
             onTap: () {
               Navigator.push(
                 context,
@@ -61,16 +61,68 @@ class QuickActionsRow extends StatelessWidget {
   }
 
   Widget _buildGiftIcon() {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // Box
-        Container(
-          width: 36,
-          height: 30,
+    return Image.asset(
+      'assets/images/claimbonus.png',
+      width: 55,
+      height: 55,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        // Fallback to custom icon if image fails to load
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            // Box
+            Container(
+              width: 54, // Scaled 1.5x
+              height: 45, // Scaled 1.5x
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFD54F),
+                borderRadius: BorderRadius.circular(6),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+            ),
+            // Vertical Ribbon
+            Container(
+              width: 12,
+              height: 45,
+              color: const Color(0xFFFFA000),
+            ),
+            // Horizontal Ribbon
+            Container(
+              width: 54,
+              height: 9,
+              color: const Color(0xFFFFA000),
+            ),
+            // Bow
+            Positioned(
+              top: -9,
+              child: Icon(Icons.emergency, color: const Color(0xFFFFA000), size: 24),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCalendarIcon() {
+    return Image.asset(
+      'assets/images/calender.png',
+      width: 55,
+      height: 55,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          width: 55,
+          height: 55,
           decoration: BoxDecoration(
-            color: const Color(0xFFFFD54F),
-            borderRadius: BorderRadius.circular(4),
+            color: const Color(0xFF66BB6A),
+            borderRadius: BorderRadius.circular(8),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.2),
@@ -79,127 +131,100 @@ class QuickActionsRow extends StatelessWidget {
               ),
             ],
           ),
-        ),
-        // Vertical Ribbon
-        Container(
-          width: 8,
-          height: 30,
-          color: const Color(0xFFFFA000),
-        ),
-        // Horizontal Ribbon
-        Container(
-          width: 36,
-          height: 6,
-          color: const Color(0xFFFFA000),
-        ),
-        // Bow
-        Positioned(
-          top: -6,
-          child: Icon(Icons.emergency, color: const Color(0xFFFFA000), size: 16),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCalendarIcon() {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: const Color(0xFF66BB6A),
-        borderRadius: BorderRadius.circular(6),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 4,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Top bar with rings
-          Container(
-            height: 10,
-            decoration: const BoxDecoration(
-              color: Color(0xFF2E7D32),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(6)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildRing(),
-                _buildRing(),
-                _buildRing(),
-              ],
-            ),
-          ),
-          // Grid
-          Padding(
-            padding: const EdgeInsets.all(4.0),
-            child: GridView.count(
-              crossAxisCount: 3,
-              shrinkWrap: true,
-              mainAxisSpacing: 2,
-              crossAxisSpacing: 2,
-              padding: EdgeInsets.zero,
-              children: List.generate(
-                6,
-                (index) => Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFAED581),
-                    borderRadius: BorderRadius.circular(2),
+          child: Column(
+            children: [
+              // Top bar with rings
+              Container(
+                height: 14,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF2E7D32),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildRing(),
+                    _buildRing(),
+                    _buildRing(),
+                  ],
+                ),
+              ),
+              // Grid
+              Padding(
+                padding: const EdgeInsets.all(5.0),
+                child: GridView.count(
+                  crossAxisCount: 3,
+                  shrinkWrap: true,
+                  mainAxisSpacing: 3,
+                  crossAxisSpacing: 3,
+                  padding: EdgeInsets.zero,
+                  children: List.generate(
+                    6,
+                    (index) => Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFAED581),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildRing() {
     return Container(
-      width: 4,
-      height: 6,
+      width: 6,
+      height: 9,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(2),
+        borderRadius: BorderRadius.circular(3),
       ),
     );
   }
 
   Widget _buildMegaphoneIcon() {
-    return Transform.rotate(
-      angle: -0.3,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Cone
-          Icon(Icons.campaign, size: 48, color: const Color(0xFFFF7043)),
-          // Detail
-          Positioned(
-            right: 12,
-            child: Icon(Icons.circle, size: 8, color: const Color(0xFFD84315)),
+    return Image.asset(
+      'assets/images/referearn.png',
+      width: 55,
+      height: 55,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        return Transform.rotate(
+          angle: -0.3,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Cone
+              Icon(Icons.campaign, size: 60, color: const Color(0xFFFF7043)),
+              // Detail
+              Positioned(
+                right: 15,
+                child: Icon(Icons.circle, size: 10, color: const Color(0xFFD84315)),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
 class _QuickActionCard extends StatelessWidget {
   final String title;
-  final Color color1;
-  final Color color2;
+  final Color backgroundColor;
+  final Color buttonColor;
   final VoidCallback onTap;
   final Widget Function() iconBuilder;
 
   const _QuickActionCard({
     required this.title,
-    required this.color1,
-    required this.color2,
+    required this.backgroundColor,
+    required this.buttonColor,
     required this.onTap,
     required this.iconBuilder,
   });
@@ -209,42 +234,51 @@ class _QuickActionCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 110, // Square-ish aspect ratio
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        height: 120,
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [color1, color2],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
+          color: backgroundColor,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: color2.withOpacity(0.4),
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            Expanded(
-              child: Center(
-                child: iconBuilder(),
-              ),
+            const Spacer(),
+            Center(
+              child: iconBuilder(),
             ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13, // Slightly smaller to fit
-                fontWeight: FontWeight.bold,
+            const Spacer(),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              decoration: BoxDecoration(
+                color: buttonColor,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: buttonColor.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              child: Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),

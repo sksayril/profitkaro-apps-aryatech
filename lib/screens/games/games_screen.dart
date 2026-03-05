@@ -104,7 +104,7 @@ class _GamesScreenState extends State<GamesScreen> {
                   ),
                   child: const Center(
                     child: Text(
-                      '\$',
+                      '₹',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -507,7 +507,7 @@ class _GamesScreenState extends State<GamesScreen> {
                           ),
                           child: const Center(
                             child: Text(
-                              '\$',
+                              '₹',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 7,

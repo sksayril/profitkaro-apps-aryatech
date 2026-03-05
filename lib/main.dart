@@ -3,8 +3,14 @@ import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/providers/theme_provider.dart';
 import 'screens/splash/splash_screen.dart';
+import 'core/services/tapjoy_service.dart';
+import 'core/services/deep_link_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  TapjoyService.init();
+  // Initialize deep link service
+  await DeepLinkService().init();
   runApp(const MyApp());
 }
 

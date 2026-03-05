@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
+import '../../core/services/referral_service.dart';
 
 class ReferEarnScreen extends StatefulWidget {
   const ReferEarnScreen({super.key});
@@ -200,103 +204,62 @@ class _ReferEarnScreenState extends State<ReferEarnScreen>
   Widget _buildHeroImage() {
     return Container(
       width: double.infinity,
-      height: 220,
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF7DD3C0), Color(0xFF5CBCA9)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
         borderRadius: BorderRadius.circular(20),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Two people illustration
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Person 1 (Male)
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE8C4A8),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.person, color: Colors.grey, size: 40),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 50,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF5DADE2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  // Gift box
-                  Container(
-                    width: 35,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF3E0),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: const Color(0xFFFFB74D), width: 2),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.card_giftcard, color: Color(0xFFFFB74D), size: 16),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 40),
-              // Person 2 (Female)
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE8C4A8),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.person, color: Colors.grey, size: 40),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 50,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFB74D),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  // Gift box
-                  Container(
-                    width: 35,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F5E9),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: const Color(0xFF81C784), width: 2),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.card_giftcard, color: Color(0xFF81C784), size: 16),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
         ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Image.asset(
+          'assets/images/referearnthubnail.jpeg',
+          width: double.infinity,
+          fit: BoxFit.contain,
+          alignment: Alignment.center,
+          errorBuilder: (context, error, stackTrace) {
+            // Fallback to gradient if image fails to load
+            if (kDebugMode) {
+              print('Error loading referearnthubnail.jpeg: $error');
+            }
+            return Container(
+              height: 200,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF7DD3C0), Color(0xFF5CBCA9)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.image_not_supported,
+                      color: Colors.white.withOpacity(0.5),
+                      size: 48,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Image not found',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -332,17 +295,15 @@ class _ReferEarnScreenState extends State<ReferEarnScreen>
                 height: 1.5,
               ),
               children: [
-                const TextSpan(text: 'Get '),
-                TextSpan(
-                  text: _rewardType == 'Coins'
-                      ? '$_rewardPerReferral Coins'
-                      : '₹$_rewardPerReferral',
-                  style: const TextStyle(
+                const TextSpan(text: 'Earn up to '),
+                const TextSpan(
+                  text: '₹150',
+                  style: TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const TextSpan(text: ' for every friend who completes their first task.'),
+                const TextSpan(text: ' per referral by inviting your friends to the app.'),
               ],
             ),
           ),
@@ -381,89 +342,153 @@ class _ReferEarnScreenState extends State<ReferEarnScreen>
     );
   }
 
+  Widget _buildReferralLinkSkeleton() {
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, child) {
+        return ShaderMask(
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: Alignment(-1.0 + _shimmerController.value * 2, 0),
+              end: Alignment(1.0 + _shimmerController.value * 2, 0),
+              colors: const [
+                Colors.white24,
+                Colors.white38,
+                Colors.white24,
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ).createShader(bounds);
+          },
+          child: Container(
+            height: 16,
+            width: 180,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildReferralCodeSection(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground(context),
-          borderRadius: BorderRadius.circular(16),
+          color: const Color(0xFF201E2B), // Dark indigo background like in image
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: AppColors.primary.withOpacity(0.2),
+            width: 1,
+          ),
         ),
-        child: Column(
+        child: Row(
           children: [
-            Text(
-              'YOUR REFERRAL CODE',
-              style: TextStyle(
-                color: Colors.grey.shade500,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1,
+            // QR Code Icon
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.qr_code_2_rounded,
+                color: Colors.white,
+                size: 28,
               ),
             ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.background(context),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border(context), width: 1),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            const SizedBox(width: 16),
+            // Refer Link Text
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: _isLoading
-                        ? _buildReferralCodeSkeleton()
-                        : Text(
-                            _referCode.isEmpty ? 'N/A' : _referCode,
-                            style: const TextStyle(
-                              color: AppColors.primary,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 2,
-                            ),
-                          ),
-                  ),
-                  GestureDetector(
-                    onTap: _referCode.isEmpty || _isLoading
-                        ? null
-                        : () {
-                            Clipboard.setData(ClipboardData(text: _referCode));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Referral code copied!'),
-                                backgroundColor: AppColors.green,
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          },
-                    child: Opacity(
-                      opacity: (_referCode.isEmpty || _isLoading) ? 0.5 : 1.0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Row(
-                          children: [
-                            Text(
-                              'Copy',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            SizedBox(width: 4),
-                            Icon(Icons.copy, color: Colors.white, size: 16),
-                          ],
-                        ),
-                      ),
+                  Text(
+                    'Refer Link',
+                    style: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  _isLoading
+                      ? _buildReferralLinkSkeleton()
+                      : _referCode.isEmpty
+                          ? Text(
+                              'N/A',
+                              style: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontSize: 13,
+                              ),
+                            )
+                          : Text(
+                              ReferralService.getReferralUrl(_referCode),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                 ],
+              ),
+            ),
+            // Copy Button
+            GestureDetector(
+              onTap: _referCode.isEmpty || _isLoading
+                  ? null
+                        : () {
+                            // Copy the full referral URL using ReferralService (path format)
+                            final referralUrl = ReferralService.getReferralUrl(_referCode);
+                            Clipboard.setData(ClipboardData(text: referralUrl));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Referral link copied! Share it with friends.'),
+                          backgroundColor: AppColors.green,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+              child: Opacity(
+                opacity: (_referCode.isEmpty || _isLoading) ? 0.5 : 1.0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.primary, AppColors.primaryDark],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.copy, color: Colors.white, size: 16),
+                      SizedBox(width: 6),
+                      Text(
+                        'Copy Link',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -619,84 +644,335 @@ class _ReferEarnScreenState extends State<ReferEarnScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'How it works?',
+            'Refer & Earn Program',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 18,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 16),
-          _buildHowItWorksItem(
-            icon: Icons.share,
-            iconColor: AppColors.primary,
-            title: 'Share your link',
-            description: 'Send your unique link to friends via WhatsApp or Telegram.',
+          const SizedBox(height: 12),
+          Text(
+            'Invite your friends to join Profit Karo and earn exciting rewards.',
+            style: TextStyle(
+              color: Colors.grey.shade400,
+              fontSize: 14,
+              height: 1.5,
+            ),
           ),
-          const SizedBox(height: 16),
-          _buildHowItWorksItem(
-            icon: Icons.smartphone,
-            iconColor: Colors.grey,
-            title: 'Friend signs up & plays',
-            description: 'They create an account and complete their first micro-task.',
+          const SizedBox(height: 20),
+          // Earning Points
+          _buildEarningPoint(
+            'Earn up to ₹150 per referral by inviting your friends to the app.',
           ),
-          const SizedBox(height: 16),
-          _buildHowItWorksItem(
-            icon: Icons.account_balance_wallet,
-            iconColor: Colors.grey,
-            title: 'You get paid instantly',
-            description: '₹50 is credited directly to your Profit Karo wallet.',
+          const SizedBox(height: 12),
+          _buildEarningPoint(
+            'Get ₹10 instantly when your friend completes their first 3 tasks after joining.',
+          ),
+          const SizedBox(height: 12),
+          _buildEarningPoint(
+            'After that, whenever your friend earns on the app, you will receive 5% of their earnings as a bonus.',
+          ),
+          const SizedBox(height: 24),
+          // Bonus Tiers
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground(context),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.primary.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.stars,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Referral Bonus Tiers',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildBonusTier('Refer 10 friends', 'Get ₹20 Bonus'),
+                const SizedBox(height: 12),
+                _buildBonusTier('Refer 50 friends', 'Get ₹100 Bonus'),
+                const SizedBox(height: 12),
+                _buildBonusTier('Refer 100 friends', 'Get ₹250 Bonus'),
+                const SizedBox(height: 12),
+                _buildBonusTier('Refer 200 friends', 'Get ₹500 Mega Bonus', isHighlighted: true),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Closing Message
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primary.withOpacity(0.2),
+                  AppColors.primary.withOpacity(0.1),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.primary.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.celebration,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'That means when your friends earn, you earn too!',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Start sharing your referral link now and grow your earnings together.',
+                  style: TextStyle(
+                    color: Colors.grey.shade400,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildHowItWorksItem({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String description,
-  }) {
+  Widget _buildEarningPoint(String text) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 44,
-          height: 44,
+          margin: const EdgeInsets.only(top: 6),
+          width: 6,
+          height: 6,
           decoration: BoxDecoration(
-            color: iconColor.withOpacity(0.2),
+            color: AppColors.primary,
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: iconColor, size: 20),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 12),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                description,
-                style: TextStyle(
-                  color: Colors.grey.shade500,
-                  fontSize: 13,
-                  height: 1.4,
-                ),
-              ),
-            ],
+          child: Text(
+            text,
+            style: TextStyle(
+              color: Colors.grey.shade300,
+              fontSize: 14,
+              height: 1.5,
+            ),
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildBonusTier(String friends, String bonus, {bool isHighlighted = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isHighlighted
+            ? AppColors.primary.withOpacity(0.15)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        border: isHighlighted
+            ? Border.all(color: AppColors.primary.withOpacity(0.5), width: 1)
+            : null,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 12,
+                color: isHighlighted ? AppColors.primary : Colors.grey.shade400,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                friends,
+                style: TextStyle(
+                  color: isHighlighted ? Colors.white : Colors.grey.shade300,
+                  fontSize: 14,
+                  fontWeight: isHighlighted ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+          Text(
+            bonus,
+            style: TextStyle(
+              color: isHighlighted ? AppColors.primary : Colors.grey.shade400,
+              fontSize: 14,
+              fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Get the share message with referral code and URL
+  String _getShareMessage() {
+    if (_referCode.isEmpty) {
+      return 'Join Profit Karo and start earning!';
+    }
+    final referralUrl = ReferralService.getReferralUrl(_referCode);
+    return 'Join Profit Karo and start earning!\n\nUse my referral code: $_referCode\n\nGet the app here: $referralUrl';
+  }
+
+  /// Share via WhatsApp
+  Future<void> _shareViaWhatsApp() async {
+    if (_referCode.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Referral code not available'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final message = _getShareMessage();
+      final encodedMessage = Uri.encodeComponent(message);
+      final whatsappUrl = 'https://wa.me/?text=$encodedMessage';
+      final uri = Uri.parse(whatsappUrl);
+
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('WhatsApp is not installed'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sharing via WhatsApp: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Share via Telegram
+  Future<void> _shareViaTelegram() async {
+    if (_referCode.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Referral code not available'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final referralUrl = ReferralService.getReferralUrl(_referCode);
+      final message = 'Join Profit Karo and start earning!\n\nUse my referral code: $_referCode';
+      final encodedUrl = Uri.encodeComponent(referralUrl);
+      final encodedMessage = Uri.encodeComponent(message);
+      final telegramUrl = 'https://t.me/share/url?url=$encodedUrl&text=$encodedMessage';
+      final uri = Uri.parse(telegramUrl);
+
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Telegram is not installed'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sharing via Telegram: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Share via system share sheet
+  Future<void> _shareViaSystem() async {
+    if (_referCode.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Referral code not available'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final message = _getShareMessage();
+      await Share.share(
+        message,
+        subject: 'Join Profit Karo - Referral Code: $_referCode',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sharing: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildBottomButtons() {
@@ -713,65 +989,83 @@ class _ReferEarnScreenState extends State<ReferEarnScreen>
           children: [
             // WhatsApp Button
             Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF25D366),
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.chat, color: Colors.white, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'WhatsApp',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
+              child: GestureDetector(
+                onTap: (_referCode.isEmpty || _isLoading) ? null : _shareViaWhatsApp,
+                child: Opacity(
+                  opacity: (_referCode.isEmpty || _isLoading) ? 0.5 : 1.0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF25D366),
+                      borderRadius: BorderRadius.circular(25),
                     ),
-                  ],
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.chat, color: Colors.white, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'WhatsApp',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
             const SizedBox(width: 12),
             // Telegram Button
             Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0088CC),
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.send, color: Colors.white, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'Telegram',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
+              child: GestureDetector(
+                onTap: (_referCode.isEmpty || _isLoading) ? null : _shareViaTelegram,
+                child: Opacity(
+                  opacity: (_referCode.isEmpty || _isLoading) ? 0.5 : 1.0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0088CC),
+                      borderRadius: BorderRadius.circular(25),
                     ),
-                  ],
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.send, color: Colors.white, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Telegram',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
             const SizedBox(width: 12),
             // More Button
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: AppColors.cardBackground(context),
-                borderRadius: BorderRadius.circular(25),
+            GestureDetector(
+              onTap: (_referCode.isEmpty || _isLoading) ? null : _shareViaSystem,
+              child: Opacity(
+                opacity: (_referCode.isEmpty || _isLoading) ? 0.5 : 1.0,
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBackground(context),
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  child: const Icon(Icons.more_horiz, color: Colors.white, size: 24),
+                ),
               ),
-              child: const Icon(Icons.more_horiz, color: Colors.white, size: 24),
             ),
           ],
         ),

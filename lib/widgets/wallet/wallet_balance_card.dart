@@ -288,14 +288,15 @@ class _WalletBalanceCardState extends State<WalletBalanceCard>
                                 children: [
                                   Row(
                                     children: [
-                                      Icon(
-                                        Icons.monetization_on,
-                                        color: AppColors.yellow,
-                                        size: 18,
+                                      const Text(
+                                        '🌴',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                        ),
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
-                                        'Coins',
+                                        'Tree',
                                         style: TextStyle(
                                           color: Colors.white.withValues(alpha: 0.95),
                                           fontSize: 13,
@@ -337,7 +338,7 @@ class _WalletBalanceCardState extends State<WalletBalanceCard>
                                   Padding(
                                     padding: const EdgeInsets.only(bottom: 2),
                                     child: Text(
-                                      'coins',
+                                      'tree',
                                       style: TextStyle(
                                         color: Colors.white.withValues(alpha: 0.7),
                                         fontSize: 11,

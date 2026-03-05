@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profit Karo - Opening App</title>
+    <script>
+        // Extract referral code from URL
+        // Supports: /refer/CODE, /refer?code=CODE, /refer?refer=CODE
+        function getReferralCode() {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // Check query parameters: ?code=CODE or ?refer=CODE
+            let code = urlParams.get('code') || urlParams.get('refer');
+            
+            // Check path: /refer/CODE
+            if (!code) {
+                const pathMatch = window.location.pathname.match(/\/refer\/([A-Z0-9]+)/i);
+                if (pathMatch && pathMatch[1]) {
+                    code = pathMatch[1];
+                }
+            }
+            
+            // Legacy: /refer=CODE in path
+            if (!code) {
+                const pathMatch = window.location.pathname.match(/refer=([A-Z0-9]+)/i);
+                if (pathMatch && pathMatch[1]) {
+                    code = pathMatch[1];
+                }
+            }
+            
+            return code ? code.toUpperCase() : null;
+        }
+
+        // Try to open app, fallback to Play Store
+        function redirectToApp() {
+            const referralCode = getReferralCode();
+            
+            if (!referralCode) {
+                // No referral code found, redirect to Play Store
+                window.location.href = 'https://play.google.com/store/apps/details?id=com.profitkaro';
+                return;
+            }
+            
+            // Play Store URL with referrer
+            const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.profitkaro&referrer=' + referralCode;
+            
+            // Step 1: Try Android Intent URL
+            // Format: intent://refer?code=VYD62W#Intent;scheme=profitkaro;package=com.profitkaro;S.refer=VYD62W;end
+            const intentUrl = 'intent://refer?code=' + referralCode + 
+                '#Intent;scheme=profitkaro;package=com.profitkaro;S.refer=' + referralCode + ';end';
+            
+            // Step 2: Fallback to custom scheme
+            const customSchemeUrl = 'profitkaro://refer?code=' + referralCode;
+            
+            let triedIntent = false;
+            let triedCustomScheme = false;
+            
+            // Try Intent URL first
+            function tryIntent() {
+                if (!triedIntent) {
+                    triedIntent = true;
+                    window.location.href = intentUrl;
+                    setTimeout(tryCustomScheme, 500);
+                }
+            }
+            
+            // Try custom scheme as fallback
+            function tryCustomScheme() {
+                if (!triedCustomScheme) {
+                    triedCustomScheme = true;
+                    window.location.href = customSchemeUrl;
+                    setTimeout(redirectToPlayStore, 500);
+                }
+            }
+            
+            // Final fallback: Redirect to Play Store
+            function redirectToPlayStore() {
+                window.location.href = playStoreUrl;
+            }
+            
+            // Start the redirect chain
+            tryIntent();
+            
+            // Ultimate fallback: If nothing works, redirect after 2 seconds
+            setTimeout(redirectToPlayStore, 2000);
+        }
+
+        // Auto-redirect on page load
+        window.onload = function() {
+            redirectToApp();
+        };
+    </script>
+</head>
+<body>
+    <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif; background: linear-gradient(135deg, #1F3A47 0%, #0F1E2E 100%); color: white; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <h1 style="margin-bottom: 20px;">Opening Profit Karo App...</h1>
+        <p style="margin-bottom: 10px;">Please wait while we open the app.</p>
+        <p style="margin-bottom: 30px; opacity: 0.8;">If the app doesn't open, you'll be redirected to the Play Store.</p>
+        <a href="https://play.google.com/store/apps/details?id=com.profitkaro" 
+           style="color: #4A90D9; text-decoration: none; font-weight: bold; padding: 12px 24px; border: 2px solid #4A90D9; border-radius: 25px; display: inline-block;">
+            Download from Play Store
+        </a>
+    </div>
+</body>
+</html>

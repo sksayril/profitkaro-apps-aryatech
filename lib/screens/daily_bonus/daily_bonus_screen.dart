@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
@@ -14,6 +15,12 @@ class DailyBonusScreen extends StatefulWidget {
 }
 
 class _DailyBonusScreenState extends State<DailyBonusScreen> {
+  // AdMob Configuration
+  static const String _rewardedAdUnitId = 'ca-app-pub-4532355113190688/5923175121';
+  RewardedAd? _rewardedAd;
+  bool _isAdLoaded = false;
+  bool _isAdLoading = false;
+  
   List<Map<String, dynamic>> _bonuses = [];
   String _rewardType = 'Coins';
   String _currentDay = '';
@@ -32,6 +39,99 @@ class _DailyBonusScreenState extends State<DailyBonusScreen> {
     _fetchDailyBonuses();
     _fetchWalletBalance();
     _fetchScratchCard();
+    _initializeAds();
+  }
+
+  void _initializeAds() {
+    MobileAds.instance.initialize().then((status) {
+      _loadRewardedAd();
+    });
+  }
+
+  void _loadRewardedAd() {
+    if (_isAdLoading) return;
+    
+    setState(() {
+      _isAdLoading = true;
+      _isAdLoaded = false;
+    });
+
+    RewardedAd.load(
+      adUnitId: _rewardedAdUnitId,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (RewardedAd ad) {
+          if (mounted) {
+            setState(() {
+              _rewardedAd = ad;
+              _isAdLoaded = true;
+              _isAdLoading = false;
+            });
+            
+            _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
+              onAdDismissedFullScreenContent: (RewardedAd ad) {
+                ad.dispose();
+                if (mounted) {
+                  setState(() {
+                    _rewardedAd = null;
+                    _isAdLoaded = false;
+                  });
+                  _loadRewardedAd();
+                }
+              },
+              onAdFailedToShowFullScreenContent: (RewardedAd ad, AdError error) {
+                ad.dispose();
+                if (mounted) {
+                  setState(() {
+                    _rewardedAd = null;
+                    _isAdLoaded = false;
+                  });
+                  Future.delayed(const Duration(seconds: 2), () {
+                    if (mounted) {
+                      _loadRewardedAd();
+                    }
+                  });
+                }
+              },
+            );
+          }
+        },
+        onAdFailedToLoad: (LoadAdError error) {
+          if (mounted) {
+            setState(() {
+              _isAdLoading = false;
+              _isAdLoaded = false;
+            });
+          }
+        },
+      ),
+    );
+  }
+
+  void _showRewardedAd({required VoidCallback onAdWatched}) {
+    if (_rewardedAd != null && _isAdLoaded) {
+      _rewardedAd!.show(
+        onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
+          // Ad watched successfully
+          onAdWatched();
+        },
+      );
+    } else {
+      // Ad not loaded, try to load it first
+      if (!_isAdLoading) {
+        _loadRewardedAd();
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ad is loading. Please wait...'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _fetchScratchCard() async {
@@ -178,6 +278,16 @@ class _DailyBonusScreenState extends State<DailyBonusScreen> {
   }
 
   Future<void> _claimBonus(String day) async {
+    // Show rewarded ad before claiming
+    _showRewardedAd(
+      onAdWatched: () {
+        // After ad is watched, proceed with claim
+        _processClaim();
+      },
+    );
+  }
+
+  Future<void> _processClaim() async {
     setState(() {
       _isClaiming = true;
     });
@@ -261,6 +371,12 @@ class _DailyBonusScreenState extends State<DailyBonusScreen> {
         });
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _rewardedAd?.dispose();
+    super.dispose();
   }
 
   @override

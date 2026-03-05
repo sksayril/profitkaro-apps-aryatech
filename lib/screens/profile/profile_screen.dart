@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/storage_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/providers/theme_provider.dart';
 import '../auth/login_screen.dart';
 import '../wallet/wallet_screen.dart';
+import '../legal/privacy_policy_screen.dart';
+import '../legal/terms_conditions_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -22,6 +25,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
   String? _userName;
   final TextEditingController _nameController = TextEditingController();
+  String? _avatarUrl;
 
   @override
   void initState() {
@@ -41,7 +45,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() {
       _userName = name;
       _nameController.text = name ?? '';
+      // Generate avatar URL based on username
+      if (name != null && name.isNotEmpty) {
+        _avatarUrl = _generateAvatarUrl(name);
+      }
     });
+  }
+
+  String _generateAvatarUrl(String name) {
+    // Use UI Avatars API to generate a random human avatar based on name
+    // This creates a unique avatar for each user based on their name
+    final encodedName = Uri.encodeComponent(name);
+    // Using avataaars style from DiceBear for human-like avatars
+    // You can also use: 'https://ui-avatars.com/api/?name=$encodedName&background=random&color=fff&size=200'
+    return 'https://api.dicebear.com/7.x/avataaars/png?seed=$encodedName&size=200&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf';
   }
 
   Future<void> _fetchProfile() async {
@@ -61,8 +78,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final result = await ApiService.getUserProfile(token: token);
 
       if (result['success'] && result['data'] != null) {
+        final data = result['data'];
+        
+        // Update username from API response if available (check both cases)
+        final apiUserName = data['userName']?.toString() ?? 
+                           data['UserName']?.toString();
+        
+        if (apiUserName != null && apiUserName.isNotEmpty) {
+          // Save to storage if different from current
+          if (_userName != apiUserName) {
+            await StorageService.saveUserName(apiUserName);
+          }
+          setState(() {
+            _userName = apiUserName;
+            _nameController.text = apiUserName;
+            // Update avatar URL when username changes
+            _avatarUrl = _generateAvatarUrl(apiUserName);
+          });
+        }
+        
         setState(() {
-          _profileData = result['data'];
+          _profileData = data;
           _isLoading = false;
         });
       } else {
@@ -152,6 +188,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (saved) {
         setState(() {
           _userName = result;
+          // Regenerate avatar URL with new name
+          _avatarUrl = _generateAvatarUrl(result);
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -188,6 +226,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
+          await _loadUserName();
           await _fetchProfile();
         },
         child: SingleChildScrollView(
@@ -223,12 +262,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                _profileData?['mobileNumber']?.toString() ?? 'Loading...',
-                style: TextStyle(
-                  color: Colors.grey.shade400,
-                  fontSize: 14,
-                ),
+              FutureBuilder<String?>(
+                future: StorageService.getMobileNumber(),
+                builder: (context, snapshot) {
+                  final mobileFromStorage = snapshot.data;
+                  // Check both lowercase and uppercase field names from API
+                  final mobileFromApi = _profileData?['mobileNumber']?.toString() ?? 
+                                       _profileData?['MobileNumber']?.toString();
+                  final displayMobile = mobileFromApi ?? mobileFromStorage ?? 'Loading...';
+                  
+                  return Text(
+                    displayMobile,
+                    style: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontSize: 14,
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               
@@ -252,8 +302,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _buildGeneralSection(),
               const SizedBox(height: 24),
               
+              // Become a Sponsor Section
+              _buildBecomeSponsorSection(),
+              const SizedBox(height: 24),
+              
               // Support Section
               _buildSupportSection(),
+              const SizedBox(height: 24),
+              
+              // Legal Section
+              _buildLegalSection(),
               const SizedBox(height: 32),
               
               // Log Out Button
@@ -288,11 +346,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
             border: Border.all(color: AppColors.cardBackground(context), width: 3),
           ),
           child: ClipOval(
-            child: Icon(
-              Icons.person,
-              size: 60,
-              color: Colors.grey.shade600,
-            ),
+            child: _avatarUrl != null && _userName != null && _userName!.isNotEmpty
+                ? Image.network(
+                    _avatarUrl!,
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      // Fallback to icon if image fails to load
+                      return Container(
+                        color: const Color(0xFFE8C4A8),
+                        child: Icon(
+                          Icons.person,
+                          size: 60,
+                          color: Colors.grey.shade600,
+                        ),
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        color: const Color(0xFFE8C4A8),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.grey.shade600,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  )
+                : Container(
+                    color: const Color(0xFFE8C4A8),
+                    child: Icon(
+                      Icons.person,
+                      size: 60,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
           ),
         ),
         Positioned(
@@ -677,31 +774,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             child: Column(
               children: [
-                _buildSettingsItem(
-                  icon: Icons.notifications_outlined,
-                  title: 'Notifications',
-                  trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-                ),
-                _buildDivider(),
-                _buildSettingsItem(
-                  icon: Icons.language,
-                  title: 'Language',
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'English',
-                        style: TextStyle(
-                          color: Colors.grey.shade400,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.chevron_right, color: Colors.grey),
-                    ],
-                  ),
-                ),
-                _buildDivider(),
                 GestureDetector(
                   onTap: () {
                     Navigator.push(
@@ -720,6 +792,565 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildBecomeSponsorSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GestureDetector(
+        onTap: () {
+          _showSponsorFormDialog();
+        },
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF6C5CE7),
+                Color(0xFF8B7AE8),
+                Color(0xFF9C88E9),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF6C5CE7).withValues(alpha: 0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.stars,
+                  color: Colors.white,
+                  size: 32,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Become a Sponsor',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Promote your app with us',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.white,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSponsorFormDialog() {
+    final nameController = TextEditingController();
+    final emailController = TextEditingController();
+    final mobileController = TextEditingController();
+    final appController = TextEditingController();
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.all(20),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.cardBackground(context),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Become a Sponsor',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, color: Colors.white),
+                              onPressed: isSubmitting
+                                  ? null
+                                  : () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Fill in the details to promote your app',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Name Field
+                        Text(
+                          'Name',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: nameController,
+                          enabled: !isSubmitting,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Enter your name',
+                            hintStyle: TextStyle(color: Colors.grey.shade600),
+                            filled: true,
+                            fillColor: AppColors.cardBackgroundLight(context),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Email Field
+                        Text(
+                          'Email',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: emailController,
+                          enabled: !isSubmitting,
+                          keyboardType: TextInputType.emailAddress,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Enter your email',
+                            hintStyle: TextStyle(color: Colors.grey.shade600),
+                            filled: true,
+                            fillColor: AppColors.cardBackgroundLight(context),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Mobile Number Field
+                        Text(
+                          'Mobile Number',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: mobileController,
+                          enabled: !isSubmitting,
+                          keyboardType: TextInputType.phone,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Enter mobile number',
+                            hintStyle: TextStyle(color: Colors.grey.shade600),
+                            filled: true,
+                            fillColor: AppColors.cardBackgroundLight(context),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // App Promotion Field
+                        Text(
+                          'App Promotion Link',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: appController,
+                          enabled: !isSubmitting,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Enter app link',
+                            hintStyle: TextStyle(color: Colors.grey.shade600),
+                            filled: true,
+                            fillColor: AppColors.cardBackgroundLight(context),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Submit Button
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: isSubmitting
+                                ? null
+                                : () async {
+                                    // Validate form
+                                    if (nameController.text.trim().isEmpty) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Please enter your name'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                    if (emailController.text.trim().isEmpty ||
+                                        !emailController.text.contains('@')) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Please enter a valid email'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                    if (mobileController.text.trim().isEmpty) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Please enter mobile number'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                    if (appController.text.trim().isEmpty) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Please enter app name'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                      return;
+                                    }
+
+                                    setState(() {
+                                      isSubmitting = true;
+                                    });
+
+                                    try {
+                                      final token =
+                                          await StorageService.getToken();
+                                      if (token == null || token.isEmpty) {
+                                        setState(() {
+                                          isSubmitting = false;
+                                        });
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                  'Authentication required'),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                        }
+                                        return;
+                                      }
+
+                                      final result =
+                                          await ApiService.submitSponsorPromotion(
+                                        token: token,
+                                        sponsorName: nameController.text.trim(),
+                                        mobileNumber:
+                                            mobileController.text.trim(),
+                                        email: emailController.text.trim(),
+                                        appPromotion: appController.text.trim(),
+                                      );
+
+                                      if (context.mounted) {
+                                        Navigator.pop(context);
+                                        if (result['success'] == true) {
+                                          _showSuccessDialog(context);
+                                        } else {
+                                          _showErrorDialog(
+                                              context, result['message']);
+                                        }
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        Navigator.pop(context);
+                                        _showErrorDialog(
+                                            context, 'Error: ${e.toString()}');
+                                      }
+                                    }
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.green,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: isSubmitting
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.white),
+                                    ),
+                                  )
+                                : const Text(
+                                    'Submit',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSuccessDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF6C5CE7),
+                  Color(0xFF8B7AE8),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_circle,
+                    color: Color(0xFF6C5CE7),
+                    size: 50,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Success!',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Your sponsor promotion request has been submitted successfully. Our team will review it shortly.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF6C5CE7),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'OK',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showErrorDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground(context),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.error_outline,
+                    color: Colors.red,
+                    size: 50,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Error',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey.shade400,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'OK',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -744,10 +1375,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: AppColors.cardBackground(context),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: _buildSettingsItem(
-              icon: Icons.headset_mic_outlined,
-              title: 'Help & Support',
-              trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            child: GestureDetector(
+              onTap: () => _handleHelpSupport(),
+              child: _buildSettingsItem(
+                icon: Icons.headset_mic_outlined,
+                title: 'Help & Support',
+                trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegalSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'LEGAL',
+            style: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground(context),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const PrivacyPolicyScreen(),
+                      ),
+                    );
+                  },
+                  child: _buildSettingsItem(
+                    icon: Icons.privacy_tip_outlined,
+                    title: 'Privacy Policy',
+                    trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                  ),
+                ),
+                _buildDivider(),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const TermsConditionsScreen(),
+                      ),
+                    );
+                  },
+                  child: _buildSettingsItem(
+                    icon: Icons.description_outlined,
+                    title: 'Terms & Conditions',
+                    trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -822,6 +1518,111 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleHelpSupport() async {
+    try {
+      // Show loading indicator
+      if (!mounted) return;
+      
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final token = await StorageService.getToken();
+      if (token == null || token.isEmpty) {
+        if (mounted) {
+          Navigator.pop(context); // Close loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please login to access support'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final result = await ApiService.getSupportLink(token: token);
+
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+      }
+
+      if (result['success'] && result['data'] != null) {
+        final data = result['data'];
+        final isActive = data['isActive'] ?? false;
+        final supportLink = data['supportLink'];
+
+        if (isActive && supportLink != null && supportLink.toString().isNotEmpty) {
+          // Open support link in browser
+          final uri = Uri.parse(supportLink.toString());
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Unable to open support link'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        } else {
+          // Support is inactive or link not available
+          final note = data['note'] ?? 'Support is currently unavailable';
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                backgroundColor: AppColors.cardBackground(context),
+                title: const Text(
+                  'Support Unavailable',
+                  style: TextStyle(color: Colors.white),
+                ),
+                content: Text(
+                  note,
+                  style: const TextStyle(color: Colors.grey),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text(
+                      'OK',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Failed to fetch support link'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading if still open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handleLogout(BuildContext context) async {

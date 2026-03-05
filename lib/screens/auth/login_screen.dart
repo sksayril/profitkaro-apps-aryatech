@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
 import '../main_screen.dart';
@@ -21,6 +22,13 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _showPassword = false;
   bool _showLoginInput = false;
   bool _showSignupOption = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Show login form directly when screen is opened
+    _showLoginInput = true;
+  }
 
   @override
   void dispose() {
@@ -51,11 +59,50 @@ class _LoginScreenState extends State<LoginScreen> {
         // Save token and mobile number
         await StorageService.saveToken(result['token']);
         await StorageService.saveMobileNumber(mobileNumber);
+        
+        // Save user name from response data if available
+        if (result['data'] != null && result['data']['UserName'] != null) {
+          await StorageService.saveUserName(result['data']['UserName']);
+        }
 
         if (mounted) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const MainScreen()),
+          );
+        }
+      } else if (result['isBlocked'] == true) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Text('Account Blocked'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(result['message'] ?? 'Your account has been blocked.'),
+                  if (result['blockedReason'] != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Reason: ${result['blockedReason']}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  const Text('Please contact the administrator.'),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
           );
         }
       } else {
@@ -110,22 +157,17 @@ class _LoginScreenState extends State<LoginScreen> {
               // Background decorative elements
               _buildBackgroundElements(),
               
-              // Main content - Fixed layout without scrolling
+              // Main content - Show only login form
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 child: Column(
                   children: [
-                    const SizedBox(height: 20),
-                    
-                    // Secure & Safe button
-                    _buildSecureButton(),
-                    
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 40),
                     
                     // App Logo
                     _buildAppLogo(),
                     
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     
                     // App Name
                     _buildAppName(),
@@ -135,48 +177,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     // Tagline
                     _buildTagline(),
                     
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 40),
                     
-                    // Fast Withdrawal button
-                    _buildFastWithdrawalButton(),
-                    
-                    const SizedBox(height: 20),
-                    
-                    // Authentication Buttons - Flexible to take remaining space
+                    // Login Input Form - Flexible to take remaining space
                     Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return SingleChildScrollView(
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                minHeight: constraints.maxHeight,
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  if (!_showLoginInput && !_showSignupOption) ...[
-                                    // Mobile Number Login Button
-                                    _buildMobileLoginButton(),
-                                    const SizedBox(height: 16),
-                                    // Guest Explore
-                                    _buildGuestExplore(),
-                                  ] else if (_showLoginInput) ...[
-                                    // Login Input Form
-                                    _buildLoginInput(),
-                                  ] else if (_showSignupOption) ...[
-                                    // Signup Option - show choice between login and signup
-                                    _buildMobileAuthChoice(),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            _buildLoginInput(),
+                          ],
+                        ),
                       ),
                     ),
-                    
-                    // Terms and Privacy
-                    _buildTermsAndPrivacy(),
                     
                     const SizedBox(height: 16),
                   ],
@@ -470,10 +482,11 @@ class _LoginScreenState extends State<LoginScreen> {
         onPressed: _isLoading
             ? null
             : () {
-                setState(() {
-                  _showSignupOption = true;
-                  _showLoginInput = false;
-                });
+                // Navigate directly to signup screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SignupScreen()),
+                );
               },
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF1976D2),
@@ -735,7 +748,7 @@ class _LoginScreenState extends State<LoginScreen> {
               return null;
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -767,30 +780,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    _showLoginInput = false;
-                    _showSignupOption = false;
-                    _mobileController.clear();
-                    _passwordController.clear();
-                  });
-                },
-                child: const Text(
-                  'Back',
-                  style: TextStyle(color: Colors.grey),
-                ),
+              Text(
+                "Don't have an account? ",
+                style: TextStyle(color: Colors.grey.shade500),
               ),
               TextButton(
                 onPressed: () {
-                  setState(() {
-                    _showLoginInput = false;
-                    _showSignupOption = true;
-                  });
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SignupScreen()),
+                  );
                 },
                 child: const Text(
                   'Sign Up',
@@ -799,9 +802,135 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 24),
+          // Help & Support Button
+          _buildHelpSupportButton(),
         ],
       ),
     );
+  }
+
+  Widget _buildHelpSupportButton() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 0),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade900.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(
+          color: Colors.grey.shade700,
+          width: 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _handleHelpSupport,
+          borderRadius: BorderRadius.circular(30),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.headset_mic_outlined,
+                  color: Colors.grey,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Help & Support',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right,
+                  color: Colors.grey,
+                  size: 24,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleHelpSupport() async {
+    try {
+      // Show loading indicator
+      if (!mounted) return;
+      
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Call public API (no token required)
+      final result = await ApiService.getPublicSupportLink();
+
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+      }
+
+      if (result['success'] && result['data'] != null) {
+        final data = result['data'];
+        final isActive = data['isActive'] ?? false;
+        final supportLink = data['supportLink'];
+
+        if (isActive && supportLink != null && supportLink.toString().isNotEmpty) {
+          // Open support link in browser
+          final uri = Uri.parse(supportLink.toString());
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Unable to open support link'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        } else {
+          // Support is inactive or link not available
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Support is currently unavailable'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Failed to fetch support link'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading if still open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildTermsAndPrivacy() {

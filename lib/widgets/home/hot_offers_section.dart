@@ -1,9 +1,112 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../screens/task_offers/task_offers_screen.dart';
+import '../../core/services/tapjoy_service.dart';
 
 class HotOffersSection extends StatelessWidget {
   const HotOffersSection({super.key});
+
+  void _onOfferTap(BuildContext context) async {
+    // Show a proper loading dialog with message
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppColors.cardBackground(context),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(
+                color: AppColors.primary,
+                strokeWidth: 3,
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Loading Offerwall',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Please wait while we load premium offers...',
+                style: TextStyle(
+                  color: Colors.grey.shade400,
+                  fontSize: 13,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      // Show offerwall with longer wait time for content to load
+      final success = await TapjoyService.showOfferwall(maxWaitSeconds: 8);
+      
+      if (context.mounted) {
+        // Pop the loading indicator
+        Navigator.pop(context);
+        
+        if (!success) {
+          // Wait a bit more and try once more
+          await Future.delayed(const Duration(milliseconds: 500));
+          final retrySuccess = await TapjoyService.showOfferwall(maxWaitSeconds: 3);
+          
+          if (!retrySuccess && context.mounted) {
+            // If Tapjoy fails or has no offers, fallback to local tasks
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Loading premium offers... showing standard tasks instead.'),
+                backgroundColor: AppColors.primary.withOpacity(0.9),
+                duration: const Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            
+            // Small delay before navigating
+            await Future.delayed(const Duration(milliseconds: 500));
+            
+            if (context.mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const TaskOffersScreen()),
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading offerwall: ${e.toString()}'),
+            backgroundColor: Colors.red.withOpacity(0.9),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        // Fallback to standard tasks
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const TaskOffersScreen()),
+          );
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,13 +159,13 @@ class HotOffersSection extends StatelessWidget {
         const SizedBox(height: 16),
         // Hot offer cards
         SizedBox(
-          height: 140,
+          height: 180,
           child: ListView(
             scrollDirection: Axis.horizontal,
-            children: const [
-              _HotOfferCard1(),
-              SizedBox(width: 12),
-              _HotOfferCard2(),
+            children: [
+              _HotOfferCard1(onTap: () => _onOfferTap(context)),
+              const SizedBox(width: 12),
+              _HotOfferCard2(onTap: () => _onOfferTap(context)),
             ],
           ),
         ),
@@ -72,7 +175,8 @@ class HotOffersSection extends StatelessWidget {
 }
 
 class _HotOfferCard1 extends StatelessWidget {
-  const _HotOfferCard1();
+  final VoidCallback onTap;
+  const _HotOfferCard1({required this.onTap});
 
   void _showComingSoonDialog(BuildContext context) {
     showDialog(
@@ -134,9 +238,9 @@ class _HotOfferCard1 extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => _showComingSoonDialog(context),
+      onTap: onTap,
       child: Container(
-        width: 200,
+        width: 250,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.cardBackground(context),
@@ -144,7 +248,7 @@ class _HotOfferCard1 extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // 3D Pills/Capsules icon
+            // 3D Pills/Capsules icon (Increased width for better look)
             Container(
               width: 80,
               height: 80,
@@ -254,7 +358,7 @@ class _HotOfferCard1 extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Get 2x rewards on surveys',
+                    'Get 2x rewards for surveys',
                     style: TextStyle(
                       color: Colors.grey.shade500,
                       fontSize: 11,
@@ -273,78 +377,107 @@ class _HotOfferCard1 extends StatelessWidget {
 }
 
 class _HotOfferCard2 extends StatelessWidget {
-  const _HotOfferCard2();
+  final VoidCallback onTap;
+  const _HotOfferCard2({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 140,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground(context),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          // Hand holding phone icon
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: const Color(0xFF7BCDC0),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Phone
-                Positioned(
-                  top: 10,
-                  child: Container(
-                    width: 32,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 4,
-                          offset: const Offset(2, 2),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 140,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground(context),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Hand holding phone icon
+            Center(
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7BCDC0),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Phone
+                    Positioned(
+                      top: 10,
+                      child: Container(
+                        width: 32,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(6),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 4,
+                              offset: const Offset(2, 2),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Container(
-                      margin: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5E9),
-                        borderRadius: BorderRadius.circular(4),
+                        child: Container(
+                          margin: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                // Hand
-                Positioned(
-                  bottom: 5,
-                  right: 10,
-                  child: Container(
-                    width: 30,
-                    height: 25,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE0B69E),
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(12),
-                        topRight: Radius.circular(8),
-                        bottomLeft: Radius.circular(4),
-                        bottomRight: Radius.circular(8),
+                    // Hand
+                    Positioned(
+                      bottom: 5,
+                      right: 10,
+                      child: Container(
+                        width: 30,
+                        height: 25,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE0B69E),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(12),
+                            topRight: Radius.circular(8),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(8),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            // Text Content
+            const Text(
+              'App Offers',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Install & Earn',
+              style: TextStyle(
+                color: Colors.grey.shade500,
+                fontSize: 12,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }
