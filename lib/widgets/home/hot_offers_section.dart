@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../screens/task_offers/task_offers_screen.dart';
 import '../../core/services/tapjoy_service.dart';
+import '../../core/services/bitlabs_service.dart';
+import '../../core/services/ayet_service.dart';
 
 class HotOffersSection extends StatelessWidget {
   const HotOffersSection({super.key});
@@ -52,37 +54,49 @@ class HotOffersSection extends StatelessWidget {
 
     try {
       // Show offerwall with longer wait time for content to load
-      final success = await TapjoyService.showOfferwall(maxWaitSeconds: 8);
+      final result = await TapjoyService.showOfferwall(maxWaitSeconds: 8);
       
       if (context.mounted) {
         // Pop the loading indicator
         Navigator.pop(context);
         
-        if (!success) {
+        if (!result['success']) {
           // Wait a bit more and try once more
           await Future.delayed(const Duration(milliseconds: 500));
-          final retrySuccess = await TapjoyService.showOfferwall(maxWaitSeconds: 3);
+          final retryResult = await TapjoyService.showOfferwall(maxWaitSeconds: 3);
           
-          if (!retrySuccess && context.mounted) {
-            // If Tapjoy fails or has no offers, fallback to local tasks
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Loading premium offers... showing standard tasks instead.'),
-                backgroundColor: AppColors.primary.withOpacity(0.9),
-                duration: const Duration(seconds: 2),
-                behavior: SnackBarBehavior.floating,
+          if (!retryResult['success'] && context.mounted) {
+            // Show error message to user
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('No Offers Available'),
+                  ],
+                ),
+                content: Text(retryResult['message'] ?? 'No offers are currently available. Showing standard tasks instead.'),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      // Navigate to standard tasks
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const TaskOffersScreen()),
+                      );
+                    },
+                    child: const Text('View Tasks'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('OK'),
+                  ),
+                ],
               ),
             );
-            
-            // Small delay before navigating
-            await Future.delayed(const Duration(milliseconds: 500));
-            
-            if (context.mounted) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const TaskOffersScreen()),
-              );
-            }
           }
         }
       }
@@ -104,6 +118,40 @@ class HotOffersSection extends StatelessWidget {
             MaterialPageRoute(builder: (context) => const TaskOffersScreen()),
           );
         }
+      }
+    }
+  }
+
+  void _onBitLabsOfferTap(BuildContext context) async {
+    try {
+      // Show BitLabs offerwall using WebView (simple approach - no backend needed)
+      await BitLabsService.showOfferwallWebView(context);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading BitLabs offerwall: ${e.toString()}'),
+            backgroundColor: Colors.red.withOpacity(0.9),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  void _onAyetOfferTap(BuildContext context) async {
+    try {
+      // Show Ayet offerwall using WebView (simple approach - no backend needed)
+      await AyetService.showOfferwallWebView(context);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading Ayet offerwall: ${e.toString()}'),
+            backgroundColor: Colors.red.withOpacity(0.9),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     }
   }
@@ -166,6 +214,10 @@ class HotOffersSection extends StatelessWidget {
               _HotOfferCard1(onTap: () => _onOfferTap(context)),
               const SizedBox(width: 12),
               _HotOfferCard2(onTap: () => _onOfferTap(context)),
+              const SizedBox(width: 12),
+              _HotOfferCard3(onTap: () => _onBitLabsOfferTap(context)),
+              const SizedBox(width: 12),
+              _HotOfferCard4(onTap: () => _onAyetOfferTap(context)),
             ],
           ),
         ),
@@ -469,6 +521,276 @@ class _HotOfferCard2 extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'Install & Earn',
+              style: TextStyle(
+                color: Colors.grey.shade500,
+                fontSize: 12,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HotOfferCard3 extends StatelessWidget {
+  final VoidCallback onTap;
+  const _HotOfferCard3({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 140,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground(context),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // BitLabs gift card icon
+            Center(
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.purple.shade700,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Gift box
+                    Positioned(
+                      top: 15,
+                      child: Container(
+                        width: 40,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: Colors.purple.shade300,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Stack(
+                          children: [
+                            // Ribbon
+                            Positioned(
+                              left: 18,
+                              top: 0,
+                              child: Container(
+                                width: 4,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  color: Colors.pink.shade300,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 12,
+                              left: 8,
+                              child: Container(
+                                width: 24,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Colors.pink.shade300,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Gift bow
+                    Positioned(
+                      top: 8,
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: Colors.pink.shade400,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Text Content
+            const Text(
+              'BitLabs Offers',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Surveys & Tasks',
+              style: TextStyle(
+                color: Colors.grey.shade500,
+                fontSize: 12,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HotOfferCard4 extends StatelessWidget {
+  final VoidCallback onTap;
+  const _HotOfferCard4({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 140,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground(context),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Ayet Studio icon (star/badge design)
+            Center(
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4A90E2),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Star shape
+                    Positioned(
+                      top: 15,
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Container(
+                            width: 35,
+                            height: 35,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4A90E2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'A',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Small stars around
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 8,
+                      left: 12,
+                      child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 8,
+                      right: 12,
+                      child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Text Content
+            const Text(
+              'Ayet Offers',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Premium Rewards',
               style: TextStyle(
                 color: Colors.grey.shade500,
                 fontSize: 12,

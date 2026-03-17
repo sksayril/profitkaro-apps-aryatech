@@ -4,11 +4,13 @@ import 'core/theme/app_theme.dart';
 import 'core/providers/theme_provider.dart';
 import 'screens/splash/splash_screen.dart';
 import 'core/services/tapjoy_service.dart';
+import 'core/services/bitlabs_service.dart';
 import 'core/services/deep_link_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   TapjoyService.init();
+  BitLabsService.init();
   // Initialize deep link service
   await DeepLinkService().init();
   runApp(const MyApp());

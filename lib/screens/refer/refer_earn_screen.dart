@@ -229,33 +229,33 @@ class _ReferEarnScreenState extends State<ReferEarnScreen>
             }
             return Container(
               height: 200,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF7DD3C0), Color(0xFF5CBCA9)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-                borderRadius: BorderRadius.circular(20),
-              ),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF7DD3C0), Color(0xFF5CBCA9)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
               child: Center(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
                     Icon(
                       Icons.image_not_supported,
                       color: Colors.white.withOpacity(0.5),
                       size: 48,
-                    ),
-                    const SizedBox(height: 8),
+                  ),
+                  const SizedBox(height: 8),
                     Text(
                       'Image not found',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.7),
                         fontSize: 12,
-                      ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
               ),
             );
           },
@@ -427,16 +427,16 @@ class _ReferEarnScreenState extends State<ReferEarnScreen>
                                 fontSize: 13,
                               ),
                             )
-                          : Text(
+                      : Text(
                               ReferralService.getReferralUrl(_referCode),
                               style: TextStyle(
-                                color: Colors.white,
+                            color: Colors.white,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
-                              ),
+                          ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                            ),
+                        ),
                 ],
               ),
             ),
@@ -686,8 +686,8 @@ class _ReferEarnScreenState extends State<ReferEarnScreen>
               ),
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
                 Row(
                   children: [
                     Icon(
@@ -719,9 +719,9 @@ class _ReferEarnScreenState extends State<ReferEarnScreen>
           ),
           const SizedBox(height: 20),
           // Closing Message
-          Container(
+        Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
+          decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
                   AppColors.primary.withOpacity(0.2),
@@ -736,9 +736,9 @@ class _ReferEarnScreenState extends State<ReferEarnScreen>
                 width: 1,
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
                 Row(
                   children: [
                     Icon(
@@ -751,27 +751,27 @@ class _ReferEarnScreenState extends State<ReferEarnScreen>
                       child: Text(
                         'That means when your friends earn, you earn too!',
                         style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                Text(
+              Text(
                   'Start sharing your referral link now and grow your earnings together.',
-                  style: TextStyle(
+                style: TextStyle(
                     color: Colors.grey.shade400,
-                    fontSize: 13,
-                    height: 1.4,
-                  ),
+                  fontSize: 13,
+                  height: 1.4,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
+      ],
       ),
     );
   }

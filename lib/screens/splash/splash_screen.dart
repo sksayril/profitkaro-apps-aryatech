@@ -59,7 +59,24 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _checkForReferralCode() async {
-    // Check for referral code from deep link
+    if (kDebugMode) {
+      print('=== Splash Screen: Checking for Referral Code ===');
+    }
+    
+    // First, check for referral code from Install Referrer (Play Store)
+    // This is important for first-time installs from Play Store
+    try {
+      final saved = await ReferralService.processReferralCodeFromInstallReferrer();
+      if (kDebugMode) {
+        print('Splash: Install referrer processed. Saved: $saved');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Splash: Error processing install referrer: $e');
+      }
+    }
+    
+    // Also check for referral code from deep link
     final deepLinkService = DeepLinkService();
     final initialLink = deepLinkService.getInitialLink();
     

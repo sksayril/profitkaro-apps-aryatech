@@ -13,9 +13,12 @@ import java.util.Hashtable
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "tapjoy_offerwall"
+    private val BITLABS_CHANNEL = "bitlabs_offerwall"
     private val DEEP_LINK_CHANNEL = "deep_link"
     private var offerwallPlacement: TJPlacement? = null
     private var isContentReady = false
+    private var isTapjoyConnected = false
+    private var isBitLabsInitialized = false
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
@@ -31,7 +34,6 @@ class MainActivity : FlutterActivity() {
             val url = data.toString()
             System.out.println("MainActivity: Deep link received: $url")
             
-            // Send to Flutter via method channel
             flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
                 MethodChannel(messenger, DEEP_LINK_CHANNEL).invokeMethod(
                     "onDeepLink",
@@ -43,27 +45,40 @@ class MainActivity : FlutterActivity() {
 
     override fun onStart() {
         super.onStart()
+        System.out.println("Tapjoy: ===== onStart() - Initializing Tapjoy SDK =====")
+        
+        val sdkKey = "Z9Y4_msqSmGbgZLCWzsPogECs9zdQNwI88Y6MOAqjPxyCKIJle9HYmysHYoc"
         val flags = Hashtable<String, Any>()
-        Tapjoy.connect(applicationContext, "Z9Y4_msqSmGbgZLCWzsPogECs9zdQNwI88Y6MOAqjPxyCKIJle9HYmysHYoc", flags, object : TJConnectListener() {
+        
+        Tapjoy.connect(applicationContext, sdkKey, flags, object : TJConnectListener() {
             override fun onConnectSuccess() {
-                // Set User ID if possible here or wait for Flutter
+                isTapjoyConnected = true
+                System.out.println("Tapjoy: ✓✓✓ SDK CONNECTED SUCCESSFULLY")
                 
+                // Set currency listener
                 Tapjoy.setEarnedCurrencyListener { currencyName, amount ->
+                    System.out.println("Tapjoy: Currency earned - $amount $currencyName")
                     notifyFlutterOfReward(currencyName, amount)
                 }
                 
-                prepareOfferwall()
+                // Initialize placement immediately after connection
+                initializePlacement()
             }
 
-            override fun onConnectFailure(p0: Int, p1: String?) {}
-            override fun onConnectWarning(code: Int, message: String?) {}
+            override fun onConnectFailure(errorCode: Int, errorMessage: String?) {
+                isTapjoyConnected = false
+                System.out.println("Tapjoy: ✗✗✗ CONNECTION FAILED")
+                System.out.println("Tapjoy: Error code: $errorCode, message: $errorMessage")
+            }
+            
+            override fun onConnectWarning(warningCode: Int, warningMessage: String?) {
+                System.out.println("Tapjoy: ⚠ WARNING - Code: $warningCode, Message: $warningMessage")
+            }
         })
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-
-        // Handle deep links
         handleDeepLink(intent)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
@@ -73,22 +88,22 @@ class MainActivity : FlutterActivity() {
                     result.success(showed)
                 }
                 "isContentReady" -> {
-                    result.success(isContentReady && offerwallPlacement?.isContentReady == true)
+                    result.success(isContentReady)
                 }
                 "prepareOfferwall" -> {
-                    if (offerwallPlacement == null) {
-                        prepareOfferwall()
-                    } else {
-                        offerwallPlacement?.requestContent()
-                    }
+                    initializePlacement()
                     result.success(true)
                 }
                 "setUserID" -> {
                     val userId = call.argument<String>("userId")
-                    if (userId != null) {
+                    if (userId != null && userId.isNotEmpty()) {
                         Tapjoy.setUserID(userId, object : TJSetUserIDListener {
-                            override fun onSetUserIDSuccess() {}
-                            override fun onSetUserIDFailure(p0: String?) {}
+                            override fun onSetUserIDSuccess() {
+                                System.out.println("Tapjoy: UserID set successfully: $userId")
+                            }
+                            override fun onSetUserIDFailure(error: String?) {
+                                System.out.println("Tapjoy: UserID set failed: $error")
+                            }
                         })
                     }
                     result.success(true)
@@ -98,74 +113,194 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+
+        // BitLabs Method Channel Handler
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BITLABS_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "init" -> {
+                    val apiToken = call.argument<String>("apiToken")
+                    val secretKey = call.argument<String>("secretKey")
+                    System.out.println("BitLabs: Initializing with API Token: $apiToken")
+                    // TODO: Initialize BitLabs SDK here when SDK is available
+                    // For now, we'll mark as initialized
+                    isBitLabsInitialized = true
+                    result.success(true)
+                }
+                "setUserID" -> {
+                    val userId = call.argument<String>("userId")
+                    if (userId != null && userId.isNotEmpty()) {
+                        System.out.println("BitLabs: UserID set: $userId")
+                        // TODO: Set BitLabs User ID when SDK is available
+                    }
+                    result.success(true)
+                }
+                "prepareOfferwall" -> {
+                    System.out.println("BitLabs: Preparing offerwall...")
+                    // TODO: Prepare BitLabs offerwall when SDK is available
+                    result.success(true)
+                }
+                "isContentReady" -> {
+                    // TODO: Check BitLabs content ready status when SDK is available
+                    result.success(false)
+                }
+                "showOfferwall" -> {
+                    System.out.println("BitLabs: Attempting to show offerwall...")
+                    // TODO: Show BitLabs offerwall when SDK is available
+                    // For now, return false - this will be implemented when BitLabs SDK is added
+                    System.out.println("BitLabs: ⚠ SDK not yet integrated - Please add BitLabs SDK to build.gradle")
+                    result.success(false)
+                }
+                else -> {
+                    result.notImplemented()
+                }
+            }
+        }
     }
 
-    fun prepareOfferwall() {
-        // Placement name from Dashboard: offerwall_main
-        System.out.println("Tapjoy: Preparing placement offerwall_main")
+    private fun initializePlacement() {
+        if (!isTapjoyConnected) {
+            System.out.println("Tapjoy: Cannot initialize placement - SDK not connected")
+            return
+        }
+        
+        System.out.println("Tapjoy: ===== Initializing Placement: offerwall_card =====")
+        
+        // If placement already exists, just request content
         if (offerwallPlacement != null) {
-            System.out.println("Tapjoy: Placement already exists, requesting content")
+            System.out.println("Tapjoy: Placement exists, requesting content...")
             offerwallPlacement?.requestContent()
             return
         }
-        offerwallPlacement = Tapjoy.getPlacement("offerwall_main", object : TJPlacementListener {
+        
+        // Create new placement
+        offerwallPlacement = Tapjoy.getPlacement("offerwall_card", object : TJPlacementListener {
             override fun onRequestSuccess(placement: TJPlacement?) {
-                System.out.println("Tapjoy: Placement request success")
-                // Request content after successful placement request
+                System.out.println("Tapjoy: ✓ Placement Request SUCCESS")
+                System.out.println("Tapjoy: Placement name: ${placement?.name}")
+                // Request content immediately
                 placement?.requestContent()
             }
+            
             override fun onRequestFailure(placement: TJPlacement?, error: com.tapjoy.TJError?) {
-                System.out.println("Tapjoy: Placement request failure: " + error?.message)
+                System.out.println("Tapjoy: ✗ Placement Request FAILED")
+                System.out.println("Tapjoy: Error code: ${error?.code}, message: ${error?.message}")
                 isContentReady = false
             }
+            
             override fun onContentReady(placement: TJPlacement?) {
-                System.out.println("Tapjoy: Content ready for placement - offers available")
+                System.out.println("Tapjoy: ✓✓✓ CONTENT READY - Offers available!")
+                System.out.println("Tapjoy: Placement isContentReady: ${placement?.isContentReady}")
                 isContentReady = true
             }
+            
             override fun onContentShow(placement: TJPlacement?) {
-                System.out.println("Tapjoy: Content show callback")
+                System.out.println("Tapjoy: ✓ Offerwall is now VISIBLE")
             }
+            
             override fun onContentDismiss(placement: TJPlacement?) {
-                System.out.println("Tapjoy: Content dismissed, reloading...")
+                System.out.println("Tapjoy: Offerwall DISMISSED")
                 isContentReady = false
-                // Reload content for next time
+                // Request new content for next time
                 placement?.requestContent()
             }
-            override fun onPurchaseRequest(placement: TJPlacement?, request: TJActionRequest?, productId: String?) {}
-            override fun onRewardRequest(placement: TJPlacement?, request: TJActionRequest?, productId: String?, amount: Int) {}
-            override fun onClick(placement: TJPlacement?) {}
+            
+            override fun onPurchaseRequest(placement: TJPlacement?, request: TJActionRequest?, productId: String?) {
+                System.out.println("Tapjoy: Purchase request: $productId")
+            }
+            
+            override fun onRewardRequest(placement: TJPlacement?, request: TJActionRequest?, productId: String?, amount: Int) {
+                System.out.println("Tapjoy: Reward request: $productId, amount: $amount")
+            }
+            
+            override fun onClick(placement: TJPlacement?) {
+                System.out.println("Tapjoy: User clicked on offer")
+            }
         })
+        
+        // Request content immediately
+        System.out.println("Tapjoy: Requesting content for placement...")
         offerwallPlacement?.requestContent()
+        
+        // Check content status after delays
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (offerwallPlacement != null) {
+                val ready = offerwallPlacement?.isContentReady == true
+                System.out.println("Tapjoy: Content status after 2 seconds: ready=$ready, flag=$isContentReady")
+            }
+        }, 2000)
+        
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (offerwallPlacement != null) {
+                val ready = offerwallPlacement?.isContentReady == true
+                System.out.println("Tapjoy: Content status after 5 seconds: ready=$ready, flag=$isContentReady")
+                if (!ready) {
+                    System.out.println("Tapjoy: ⚠ Content still not ready - likely no offers available")
+                }
+            }
+        }, 5000)
     }
 
     private fun showOfferwall(): Boolean {
+        System.out.println("Tapjoy: ===== showOfferwall() called =====")
+        
+        // Ensure Tapjoy is connected
+        if (!isTapjoyConnected) {
+            System.out.println("Tapjoy: ✗ SDK not connected, cannot show offerwall")
+            return false
+        }
+        
+        // Ensure placement exists
         if (offerwallPlacement == null) {
-            System.out.println("Tapjoy: Placement is null, preparing...")
-            prepareOfferwall()
+            System.out.println("Tapjoy: ✗ Placement is null, initializing...")
+            initializePlacement()
+            // Wait longer for placement to be created and content to load
+            Thread.sleep(2000)
+        }
+        
+        if (offerwallPlacement == null) {
+            System.out.println("Tapjoy: ✗✗✗ Placement still null after initialization")
             return false
         }
         
-        // Check if content is ready - ONLY show if ready
-        val contentReady = offerwallPlacement?.isContentReady == true && isContentReady
+        System.out.println("Tapjoy: Placement exists: ${offerwallPlacement?.name}")
+        System.out.println("Tapjoy: Content ready status: $isContentReady")
+        System.out.println("Tapjoy: Placement content ready: ${offerwallPlacement?.isContentReady}")
         
-        if (!contentReady) {
-            System.out.println("Tapjoy: Content not ready yet. isContentReady=$isContentReady, placement.isContentReady=${offerwallPlacement?.isContentReady}")
-            // Request content if not already requested
-            if (!isContentReady) {
-                System.out.println("Tapjoy: Requesting content...")
-                offerwallPlacement?.requestContent()
-            }
+        // Request content again if not ready
+        if (!isContentReady) {
+            System.out.println("Tapjoy: Content not ready, requesting again...")
+            offerwallPlacement?.requestContent()
+            // Wait longer for content to load
+            Thread.sleep(3000)
+        }
+        
+        // Check if content is ready now
+        val placementReady = offerwallPlacement?.isContentReady == true
+        System.out.println("Tapjoy: Final check - Placement ready: $placementReady, Flag ready: $isContentReady")
+        
+        // Only show if content is actually ready
+        // Tapjoy SDK will throw error if we try to show non-200 placement
+        if (!placementReady && !isContentReady) {
+            System.out.println("Tapjoy: ✗✗✗ Cannot show - Content not available (non-200 placement)")
+            System.out.println("Tapjoy: Error: 'No placement content available. Can not show content for non-200 placement.'")
+            System.out.println("Tapjoy: ===== SOLUTION =====")
+            System.out.println("Tapjoy: 1. Go to Tapjoy Dashboard")
+            System.out.println("Tapjoy: 2. Check placement 'offerwall_card'")
+            System.out.println("Tapjoy: 3. Ensure offers are ACTIVE and PUBLISHED")
+            System.out.println("Tapjoy: 4. Check that offers are assigned to this placement")
+            System.out.println("Tapjoy: 5. Verify app is linked correctly in Tapjoy dashboard")
             return false
         }
         
-        // Content is ready, show the offerwall
+        // Try to show the offerwall
         return try {
-            System.out.println("Tapjoy: Content is ready, showing offerwall...")
+            System.out.println("Tapjoy: Attempting to SHOW offerwall...")
             offerwallPlacement?.showContent()
-            System.out.println("Tapjoy: Offerwall shown successfully")
+            System.out.println("Tapjoy: ✓✓✓ showContent() called successfully")
             true
         } catch (e: Exception) {
-            System.out.println("Tapjoy: Error showing offerwall: ${e.message}")
+            System.out.println("Tapjoy: ✗✗✗ ERROR showing offerwall: ${e.message}")
+            System.out.println("Tapjoy: Exception: ${e.javaClass.simpleName}")
             e.printStackTrace()
             false
         }
@@ -173,8 +308,12 @@ class MainActivity : FlutterActivity() {
 
     private fun notifyFlutterOfReward(currencyName: String?, amount: Int) {
         runOnUiThread {
-            MethodChannel(flutterEngine?.dartExecutor?.binaryMessenger ?: return@runOnUiThread, CHANNEL)
-                .invokeMethod("onRewardEarned", mapOf("currency" to currencyName, "amount" to amount))
+            flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+                MethodChannel(messenger, CHANNEL).invokeMethod(
+                    "onRewardEarned",
+                    mapOf("currency" to currencyName, "amount" to amount)
+                )
+            }
         }
     }
 }

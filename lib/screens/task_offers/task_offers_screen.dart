@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
+import '../../core/services/tapjoy_service.dart';
+import '../../core/services/bitlabs_service.dart';
 import 'task_details_screen.dart';
 
 class TaskOffersScreen extends StatefulWidget {
@@ -102,6 +104,118 @@ class _TaskOffersScreenState extends State<TaskOffersScreen> with SingleTickerPr
     await _fetchApps();
   }
 
+  Future<void> _openTapjoyOfferwall() async {
+    // Show loading indicator
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    try {
+      final result = await TapjoyService.showOfferwall();
+      
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog
+      }
+
+      if (!result['success']) {
+        // Show error message to user
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.orange),
+                  SizedBox(width: 8),
+                  Text('No Offers Available'),
+                ],
+              ),
+              content: Text(result['message'] ?? 'No offers are currently available. Please check back later.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog if still open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _openBitLabsOfferwall() async {
+    // Show loading indicator
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    try {
+      final result = await BitLabsService.showOfferwall();
+      
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog
+      }
+
+      if (!result['success']) {
+        // Show error message to user
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.purple),
+                  SizedBox(width: 8),
+                  Text('No Offers Available'),
+                ],
+              ),
+              content: Text(result['message'] ?? 'No offers are currently available. Please check back later.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog if still open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
 
   String _getButtonText(String userStatus, bool canSubmit) {
     if (userStatus == 'approved') {
@@ -148,6 +262,39 @@ class _TaskOffersScreenState extends State<TaskOffersScreen> with SingleTickerPr
         ),
         centerTitle: true,
         actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.monetization_on, color: AppColors.yellow),
+            tooltip: 'Open Offerwall',
+            onSelected: (value) {
+              if (value == 'tapjoy') {
+                _openTapjoyOfferwall();
+              } else if (value == 'bitlabs') {
+                _openBitLabsOfferwall();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'tapjoy',
+                child: Row(
+                  children: [
+                    Icon(Icons.local_offer, size: 20),
+                    SizedBox(width: 8),
+                    Text('Tapjoy Offerwall'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'bitlabs',
+                child: Row(
+                  children: [
+                    Icon(Icons.card_giftcard, size: 20),
+                    SizedBox(width: 8),
+                    Text('BitLabs Offerwall'),
+                  ],
+                ),
+              ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: _fetchApps,
@@ -196,6 +343,39 @@ class _TaskOffersScreenState extends State<TaskOffersScreen> with SingleTickerPr
                                 color: Colors.grey.shade500,
                                 fontSize: 16,
                               ),
+                            ),
+                            const SizedBox(height: 24),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: () => _openTapjoyOfferwall(),
+                                  icon: const Icon(Icons.local_offer),
+                                  label: const Text('Tapjoy'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                ElevatedButton.icon(
+                                  onPressed: () => _openBitLabsOfferwall(),
+                                  icon: const Icon(Icons.card_giftcard),
+                                  label: const Text('BitLabs'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.purple,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),

@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
+import '../../core/services/tapjoy_service.dart';
 import '../main_screen.dart';
 import 'signup_screen.dart';
 
@@ -59,6 +60,9 @@ class _LoginScreenState extends State<LoginScreen> {
         // Save token and mobile number
         await StorageService.saveToken(result['token']);
         await StorageService.saveMobileNumber(mobileNumber);
+        
+        // Set Tapjoy User ID
+        await TapjoyService.setUserID(mobileNumber);
         
         // Save user name from response data if available
         if (result['data'] != null && result['data']['UserName'] != null) {

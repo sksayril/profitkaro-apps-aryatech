@@ -8,8 +8,6 @@ import '../../core/services/api_service.dart';
 import '../../core/providers/theme_provider.dart';
 import '../auth/login_screen.dart';
 import '../wallet/wallet_screen.dart';
-import '../legal/privacy_policy_screen.dart';
-import '../legal/terms_conditions_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -1414,12 +1412,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 GestureDetector(
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const PrivacyPolicyScreen(),
-                      ),
-                    );
+                    _launchURL('https://loankingofficial.blogspot.com/p/privacy-policy-by-profit-karo.html?m=1');
                   },
                   child: _buildSettingsItem(
                     icon: Icons.privacy_tip_outlined,
@@ -1430,12 +1423,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildDivider(),
                 GestureDetector(
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const TermsConditionsScreen(),
-                      ),
-                    );
+                    _launchURL('https://loankingofficial.blogspot.com/p/terms-and-conditions-by-profit-karo.html?m=1');
                   },
                   child: _buildSettingsItem(
                     icon: Icons.description_outlined,
@@ -1449,6 +1437,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _launchURL(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open $url'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildSettingsItem({

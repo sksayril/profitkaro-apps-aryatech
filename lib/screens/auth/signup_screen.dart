@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
 import '../../core/services/deep_link_service.dart';
 import '../../core/services/referral_service.dart';
+import '../../core/services/tapjoy_service.dart';
 import '../main_screen.dart';
 import 'login_screen.dart';
 
@@ -49,12 +51,64 @@ class _SignupScreenState extends State<SignupScreen> with WidgetsBindingObserver
   }
 
   Future<void> _loadPendingReferralCode() async {
+    if (kDebugMode) {
+      print("=== Loading Pending Referral Code ===");
+    }
+    
+    // First, check for referral code from Install Referrer (Play Store)
+    // This is important for first-time installs from Play Store
+    try {
+      final installReferrerCode = await ReferralService.getReferralCodeFromInstallReferrer();
+      if (installReferrerCode != null && installReferrerCode.isNotEmpty && mounted) {
+        if (kDebugMode) {
+          print("Found referral code from install referrer: $installReferrerCode");
+        }
+        
+        await StorageService.savePendingReferralCode(installReferrerCode);
+        setState(() {
+          _referralCodeController.text = installReferrerCode;
+        });
+        
+        if (kDebugMode) {
+          print("Auto-filled referral code in signup form: $installReferrerCode");
+        }
+        
+        return; // If we got code from install referrer, use it and return
+      } else {
+        if (kDebugMode) {
+          print("No referral code found in install referrer");
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print("Error getting install referrer code: $e");
+      }
+    }
+
     // Check for referral code from storage
+    try {
     final pendingCode = await StorageService.getPendingReferralCode();
     if (pendingCode != null && pendingCode.isNotEmpty && mounted) {
+        if (kDebugMode) {
+          print("Found referral code from storage: $pendingCode");
+        }
+        
       setState(() {
         _referralCodeController.text = pendingCode;
       });
+        
+        if (kDebugMode) {
+          print("Auto-filled referral code from storage: $pendingCode");
+        }
+      } else {
+        if (kDebugMode) {
+          print("No referral code found in storage");
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print("Error getting referral code from storage: $e");
+      }
     }
     
     // Also check for referral code from deep link service
@@ -160,6 +214,9 @@ class _SignupScreenState extends State<SignupScreen> with WidgetsBindingObserver
         // Save token, mobile number, and user name
         await StorageService.saveToken(result['token']);
         await StorageService.saveMobileNumber(mobileNumber);
+        
+        // Set Tapjoy User ID
+        await TapjoyService.setUserID(mobileNumber);
         
         // Save user name from response data if available
         if (result['data'] != null && result['data']['UserName'] != null) {

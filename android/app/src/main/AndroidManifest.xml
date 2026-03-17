@@ -54,6 +54,10 @@
         <meta-data
             android:name="tapjoy.sdk.key"
             android:value="Z9Y4_msqSmGbgZLCWzsPogECs9zdQNwI88Y6MOAqjPxyCKIJle9HYmysHYoc"/>
+        <!-- Tapjoy App ID -->
+        <meta-data
+            android:name="tapjoy.app.id"
+            android:value="67d638fe-6b2a-4a61-9b81-92c25b3b0fa2"/>
         <!-- AdMob App ID -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
