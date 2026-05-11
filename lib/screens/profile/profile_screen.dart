@@ -318,7 +318,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               
               // Version
               Text(
-                'Version 1.0.4 • Build 240',
+                'Version 1.0.6 • Build 10',
                 style: TextStyle(
                   color: Colors.grey.shade600,
                   fontSize: 12,

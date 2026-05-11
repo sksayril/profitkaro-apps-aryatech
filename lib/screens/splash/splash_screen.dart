@@ -36,8 +36,15 @@ class _SplashScreenState extends State<SplashScreen>
     
     _controller.forward();
     
-    // Check for app updates silently during splash
-    UpdateService.checkForUpdateSilently();
+    // Check for app updates during splash:
+    // optional mode => user can cancel/close.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      UpdateService.checkAndPromptUpdate(
+        context,
+        mode: UpdatePromptMode.optional,
+      );
+    });
     
     // Check for referral code in initial route (for deep linking)
     _checkForReferralCode();

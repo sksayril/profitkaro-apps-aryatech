@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "721724373441",
-    "project_id": "profitkaro",
-    "storage_bucket": "profitkaro.firebasestorage.app"
+    "project_number": "667390168064",
+    "project_id": "profit-karo-fce60",
+    "storage_bucket": "profit-karo-fce60.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:721724373441:android:81be298402786c104b9740",
+        "mobilesdk_app_id": "1:667390168064:android:dd40b8048795f1692bdce5",
         "android_client_info": {
           "package_name": "com.profitkaro"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBVI_sV5ZvTtp_5fxLfjFlXehAiAZNlnXM"
+          "current_key": "AIzaSyAvctJGARghXkyKsSX-T_cam1SxI-DlC2w"
         }
       ],
       "services": {

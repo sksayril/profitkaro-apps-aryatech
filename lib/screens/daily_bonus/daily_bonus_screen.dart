@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+import '../../core/services/google_mobile_ads_service.dart';
+import '../../core/services/task_completion_ads_service.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
@@ -15,12 +16,8 @@ class DailyBonusScreen extends StatefulWidget {
 }
 
 class _DailyBonusScreenState extends State<DailyBonusScreen> {
-  // AdMob Configuration
-  static const String _rewardedAdUnitId = 'ca-app-pub-4532355113190688/5923175121';
-  RewardedAd? _rewardedAd;
-  bool _isAdLoaded = false;
   bool _isAdLoading = false;
-  
+
   List<Map<String, dynamic>> _bonuses = [];
   String _rewardType = 'Coins';
   String _currentDay = '';
@@ -39,99 +36,32 @@ class _DailyBonusScreenState extends State<DailyBonusScreen> {
     _fetchDailyBonuses();
     _fetchWalletBalance();
     _fetchScratchCard();
-    _initializeAds();
-  }
-
-  void _initializeAds() {
-    MobileAds.instance.initialize().then((status) {
-      _loadRewardedAd();
-    });
-  }
-
-  void _loadRewardedAd() {
-    if (_isAdLoading) return;
-    
-    setState(() {
-      _isAdLoading = true;
-      _isAdLoaded = false;
-    });
-
-    RewardedAd.load(
-      adUnitId: _rewardedAdUnitId,
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (RewardedAd ad) {
-          if (mounted) {
-            setState(() {
-              _rewardedAd = ad;
-              _isAdLoaded = true;
-              _isAdLoading = false;
-            });
-            
-            _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
-              onAdDismissedFullScreenContent: (RewardedAd ad) {
-                ad.dispose();
-                if (mounted) {
-                  setState(() {
-                    _rewardedAd = null;
-                    _isAdLoaded = false;
-                  });
-                  _loadRewardedAd();
-                }
-              },
-              onAdFailedToShowFullScreenContent: (RewardedAd ad, AdError error) {
-                ad.dispose();
-                if (mounted) {
-                  setState(() {
-                    _rewardedAd = null;
-                    _isAdLoaded = false;
-                  });
-                  Future.delayed(const Duration(seconds: 2), () {
-                    if (mounted) {
-                      _loadRewardedAd();
-                    }
-                  });
-                }
-              },
-            );
-          }
-        },
-        onAdFailedToLoad: (LoadAdError error) {
-          if (mounted) {
-            setState(() {
-              _isAdLoading = false;
-              _isAdLoaded = false;
-            });
-          }
-        },
-      ),
-    );
   }
 
   void _showRewardedAd({required VoidCallback onAdWatched}) {
-    if (_rewardedAd != null && _isAdLoaded) {
-      _rewardedAd!.show(
-        onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
-          // Ad watched successfully
+    setState(() {
+      _isAdLoading = true;
+    });
+
+    GoogleMobileAdsService.instance.showRewardedAd(
+      onRewardEarned: () {
+        if (mounted) {
+          setState(() {
+            _isAdLoading = false;
+          });
           onAdWatched();
-        },
-      );
-    } else {
-      // Ad not loaded, try to load it first
-      if (!_isAdLoading) {
-        _loadRewardedAd();
-      }
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ad is loading. Please wait...'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    }
+        }
+      },
+      onFailed: () {
+        if (mounted) {
+          setState(() {
+            _isAdLoading = false;
+          });
+          // If ad fails, proceed anyway
+          onAdWatched();
+        }
+      },
+    );
   }
 
   Future<void> _fetchScratchCard() async {
@@ -277,15 +207,22 @@ class _DailyBonusScreenState extends State<DailyBonusScreen> {
     }
   }
 
-  Future<void> _claimBonus(String day) async {
-    // Show rewarded ad before claiming
+  Future<void> _claimBonus(String _) async {
+    _processClaim();
+  }
+
+  void _openWalletAfterRewarded() {
     _showRewardedAd(
       onAdWatched: () {
-        // After ad is watched, proceed with claim
-        _processClaim();
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const WalletScreen()),
+        );
       },
     );
   }
+
 
   Future<void> _processClaim() async {
     setState(() {
@@ -344,6 +281,10 @@ class _DailyBonusScreenState extends State<DailyBonusScreen> {
               duration: const Duration(seconds: 3),
             ),
           );
+          TaskCompletionAdsService.instance.runAfterTaskCompleted(
+            () {},
+            taskType: 'DailySpin',
+          );
         }
       } else {
         if (mounted) {
@@ -375,7 +316,6 @@ class _DailyBonusScreenState extends State<DailyBonusScreen> {
 
   @override
   void dispose() {
-    _rewardedAd?.dispose();
     super.dispose();
   }
 
@@ -508,12 +448,7 @@ class _DailyBonusScreenState extends State<DailyBonusScreen> {
                 ),
               ),
               GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const WalletScreen()),
-                  );
-                },
+                onTap: _isClaiming ? null : _openWalletAfterRewarded,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   decoration: BoxDecoration(
@@ -817,47 +752,44 @@ class _DailyBonusScreenState extends State<DailyBonusScreen> {
     } else if (isToday) {
       bgColor = AppColors.primary;
       textColor = Colors.white;
-      child = GestureDetector(
-        onTap: _isClaiming ? null : () => _claimBonus(day),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  dayLetter,
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _rewardType == 'Coins' ? '$amount' : '₹$amount',
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            Positioned(
-              top: 0,
-              right: 0,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
+      child = Stack(
+        alignment: Alignment.center,
+        children: [
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                dayLetter,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
+              const SizedBox(height: 2),
+              Text(
+                _rewardType == 'Coins' ? '$amount' : '₹$amount',
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 8,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       );
     } else {
       bgColor = const Color(0xFF2A2A3E);

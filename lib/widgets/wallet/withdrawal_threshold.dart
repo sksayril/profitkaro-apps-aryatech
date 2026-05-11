@@ -15,6 +15,9 @@ class _WithdrawalThresholdState extends State<WithdrawalThreshold> {
   double _minimumWithdrawalAmount = 500.0;
   double _currentWalletBalance = 0.0;
   bool _canWithdraw = false;
+  int _dailyWithdrawalRequestLimit = 0;
+  int _requestsToday = 0;
+  int _remainingRequestsToday = 0;
   bool _isLoading = true;
 
   @override
@@ -64,6 +67,9 @@ class _WithdrawalThresholdState extends State<WithdrawalThreshold> {
 
           // Handle canWithdraw
           _canWithdraw = data['canWithdraw'] ?? false;
+          _dailyWithdrawalRequestLimit = _asInt(data['dailyWithdrawalRequestLimit']);
+          _requestsToday = _asInt(data['requestsToday']);
+          _remainingRequestsToday = _asInt(data['remainingRequestsToday']);
 
           _isLoading = false;
         });
@@ -86,6 +92,13 @@ class _WithdrawalThresholdState extends State<WithdrawalThreshold> {
       locale: 'en_IN',
     );
     return formatter.format(amount);
+  }
+
+  int _asInt(dynamic value, {int fallback = 0}) {
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? fallback;
+    return fallback;
   }
 
   @override
@@ -296,6 +309,46 @@ class _WithdrawalThresholdState extends State<WithdrawalThreshold> {
                                 ),
                               ],
                             ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: (_remainingRequestsToday > 0 && _canWithdraw)
+                        ? AppColors.secondary.withValues(alpha: 0.12)
+                        : Colors.orange.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: (_remainingRequestsToday > 0 && _canWithdraw)
+                          ? AppColors.secondary.withValues(alpha: 0.3)
+                          : Colors.orange.withValues(alpha: 0.35),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.timelapse,
+                        color: (_remainingRequestsToday > 0 && _canWithdraw)
+                            ? AppColors.secondary
+                            : Colors.orange,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _dailyWithdrawalRequestLimit > 0
+                              ? 'Daily requests: $_requestsToday/$_dailyWithdrawalRequestLimit • Remaining: $_remainingRequestsToday'
+                              : 'Remaining requests today: $_remainingRequestsToday',
+                          style: TextStyle(
+                            color: Colors.grey.shade200,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),

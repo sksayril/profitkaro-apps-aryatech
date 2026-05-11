@@ -19,6 +19,8 @@ class MainActivity : FlutterActivity() {
     private var isContentReady = false
     private var isTapjoyConnected = false
     private var isBitLabsInitialized = false
+    private var tapjoyChannel: MethodChannel? = null
+    private var deepLinkChannel: MethodChannel? = null
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
@@ -33,12 +35,16 @@ class MainActivity : FlutterActivity() {
         if (data != null) {
             val url = data.toString()
             System.out.println("MainActivity: Deep link received: $url")
-            
-            flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
-                MethodChannel(messenger, DEEP_LINK_CHANNEL).invokeMethod(
+
+            try {
+                deepLinkChannel?.invokeMethod(
                     "onDeepLink",
                     mapOf("url" to url)
                 )
+            } catch (e: IllegalStateException) {
+                System.out.println("MainActivity: Deep link delivery skipped (engine not ready): ${e.message}")
+            } catch (e: Exception) {
+                System.out.println("MainActivity: Deep link delivery failed: ${e.message}")
             }
         }
     }
@@ -79,9 +85,11 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        tapjoyChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        deepLinkChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEEP_LINK_CHANNEL)
         handleDeepLink(intent)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+        tapjoyChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
                 "showOfferwall" -> {
                     val showed = showOfferwall()
@@ -253,8 +261,8 @@ class MainActivity : FlutterActivity() {
         if (offerwallPlacement == null) {
             System.out.println("Tapjoy: ✗ Placement is null, initializing...")
             initializePlacement()
-            // Wait longer for placement to be created and content to load
-            Thread.sleep(2000)
+            // Never block main thread; let caller retry if placement is still not ready.
+            return false
         }
         
         if (offerwallPlacement == null) {
@@ -270,8 +278,8 @@ class MainActivity : FlutterActivity() {
         if (!isContentReady) {
             System.out.println("Tapjoy: Content not ready, requesting again...")
             offerwallPlacement?.requestContent()
-            // Wait longer for content to load
-            Thread.sleep(3000)
+            // Never block main thread; caller can retry once placement becomes ready.
+            return false
         }
         
         // Check if content is ready now
@@ -308,11 +316,15 @@ class MainActivity : FlutterActivity() {
 
     private fun notifyFlutterOfReward(currencyName: String?, amount: Int) {
         runOnUiThread {
-            flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
-                MethodChannel(messenger, CHANNEL).invokeMethod(
+            try {
+                tapjoyChannel?.invokeMethod(
                     "onRewardEarned",
                     mapOf("currency" to currencyName, "amount" to amount)
                 )
+            } catch (e: IllegalStateException) {
+                System.out.println("Tapjoy: Reward callback skipped (engine not ready): ${e.message}")
+            } catch (e: Exception) {
+                System.out.println("Tapjoy: Reward callback failed: ${e.message}")
             }
         }
     }

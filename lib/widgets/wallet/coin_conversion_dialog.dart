@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+import '../../core/services/google_mobile_ads_service.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
@@ -20,12 +20,8 @@ class CoinConversionDialog extends StatefulWidget {
 }
 
 class _CoinConversionDialogState extends State<CoinConversionDialog> {
-  // AdMob Configuration
-  static const String _rewardedAdUnitId = 'ca-app-pub-4532355113190688/5923175121';
-  RewardedAd? _rewardedAd;
-  bool _isAdLoaded = false;
   bool _isAdLoading = false;
-  
+
   int? _coinsPerRupee;
   int? _minimumCoinsToConvert;
   int? _userCoins;
@@ -40,105 +36,42 @@ class _CoinConversionDialogState extends State<CoinConversionDialog> {
   void initState() {
     super.initState();
     _fetchConversionRate();
-    _initializeAds();
   }
 
-  void _initializeAds() {
-    MobileAds.instance.initialize().then((status) {
-      _loadRewardedAd();
-    });
-  }
-
-  void _loadRewardedAd() {
-    if (_isAdLoading) return;
-    
+  /// Uses `AdConfig.rewardedUnitId` (`/21753324030,23346327069/com.profitkaro_Rewarded` in release).
+  void _showRewardedAd({required VoidCallback onRewardEarned}) {
     setState(() {
       _isAdLoading = true;
-      _isAdLoaded = false;
     });
 
-    RewardedAd.load(
-      adUnitId: _rewardedAdUnitId,
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (RewardedAd ad) {
-          if (mounted) {
-            setState(() {
-              _rewardedAd = ad;
-              _isAdLoaded = true;
-              _isAdLoading = false;
-            });
-            
-            _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
-              onAdDismissedFullScreenContent: (RewardedAd ad) {
-                ad.dispose();
-                if (mounted) {
-                  setState(() {
-                    _rewardedAd = null;
-                    _isAdLoaded = false;
-                  });
-                  _loadRewardedAd();
-                }
-              },
-              onAdFailedToShowFullScreenContent: (RewardedAd ad, AdError error) {
-                ad.dispose();
-                if (mounted) {
-                  setState(() {
-                    _rewardedAd = null;
-                    _isAdLoaded = false;
-                  });
-                  Future.delayed(const Duration(seconds: 2), () {
-                    if (mounted) {
-                      _loadRewardedAd();
-                    }
-                  });
-                }
-              },
-            );
-          }
-        },
-        onAdFailedToLoad: (LoadAdError error) {
-          if (mounted) {
-            setState(() {
-              _isAdLoading = false;
-              _isAdLoaded = false;
-            });
-          }
-        },
-      ),
+    GoogleMobileAdsService.instance.showRewardedAd(
+      onRewardEarned: () {
+        if (mounted) {
+          setState(() {
+            _isAdLoading = false;
+          });
+          onRewardEarned();
+        }
+      },
+      onFailed: () {
+        if (mounted) {
+          setState(() {
+            _isAdLoading = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ad not available. Watch the full ad to convert.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
     );
-  }
-
-  void _showRewardedAd({required VoidCallback onAdWatched}) {
-    if (_rewardedAd != null && _isAdLoaded) {
-      _rewardedAd!.show(
-        onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
-          // Ad watched successfully
-          onAdWatched();
-        },
-      );
-    } else {
-      // Ad not loaded, try to load it first
-      if (!_isAdLoading) {
-        _loadRewardedAd();
-      }
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ad is loading. Please wait...'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    }
   }
 
   @override
   void dispose() {
     _coinsController.dispose();
-    _rewardedAd?.dispose();
     super.dispose();
   }
 
@@ -289,10 +222,8 @@ class _CoinConversionDialogState extends State<CoinConversionDialog> {
       return;
     }
 
-    // Show rewarded ad before converting
     _showRewardedAd(
-      onAdWatched: () {
-        // After ad is watched, proceed with conversion
+      onRewardEarned: () {
         _processConvert(coins);
       },
     );
@@ -637,7 +568,9 @@ class _CoinConversionDialogState extends State<CoinConversionDialog> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _isConverting || !(_canConvert ?? false)
+                          onPressed: _isConverting ||
+                                  _isAdLoading ||
+                                  !(_canConvert ?? false)
                               ? null
                               : _handleConvert,
                           style: ElevatedButton.styleFrom(
@@ -649,23 +582,46 @@ class _CoinConversionDialogState extends State<CoinConversionDialog> {
                             ),
                             disabledBackgroundColor: Colors.grey.shade700,
                           ),
-                          child: _isConverting
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor:
-                                        AlwaysStoppedAnimation<Color>(Colors.white),
-                                  ),
+                          child: _isAdLoading
+                              ? const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<
+                                            Color>(Colors.white),
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      'Loading ad…',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 )
-                              : const Text(
-                                  'Convert to Rupees',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                              : _isConverting
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<
+                                            Color>(Colors.white),
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Convert to Rupees',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                         ),
                       ),
                       if (!(_canConvert ?? false)) ...[

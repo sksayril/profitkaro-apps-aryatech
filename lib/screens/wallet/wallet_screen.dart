@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+import '../../core/services/google_mobile_ads_service.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
@@ -9,7 +11,8 @@ import '../../widgets/wallet/withdrawal_threshold.dart';
 import '../../widgets/wallet/payment_method_section.dart';
 import '../../widgets/wallet/upi_input.dart';
 import '../../widgets/wallet/recent_transactions.dart';
-import '../../widgets/wallet/coin_conversion_dialog.dart';
+import '../../widgets/wallet/withdrawal_type_tabs.dart';
+import '../../widgets/wallet/gift_voucher_form.dart';
 import '../coins/coins_screen.dart';
 
 class WalletScreen extends StatefulWidget {
@@ -22,18 +25,29 @@ class WalletScreen extends StatefulWidget {
 }
 
 class _WalletScreenState extends State<WalletScreen> {
-  // AdMob Configuration
-  static const String _rewardedAdUnitId = 'ca-app-pub-4532355113190688/5923175121';
-  RewardedAd? _rewardedAd;
-  bool _isAdLoaded = false;
   bool _isAdLoading = false;
-  
+  /// User must complete rewarded ad (`AdConfig.rewardedUnitId`) before Withdraw Money.
+  bool _withdrawRewardedCompleted = false;
+
   int _selectedCurrencyTab = 0;
   int _selectedPaymentMethod = 0;
+  // Top-level withdrawal type: 0 = Gift Voucher, 1 = UPI, 2 = Bank.
+  int _withdrawalType = 0;
+  // Gift voucher selection state.
+  String? _selectedGiftBrand;
+  int? _selectedGiftAmount;
+  List<Map<String, dynamic>> _giftVoucherRequests = [];
+  bool _isLoadingGiftVoucherRequests = false;
   double _walletBalance = 0.0;
   int _coins = 0;
   bool _isLoading = true;
   bool _isSubmitting = false;
+  bool _isLoadingThreshold = false;
+  double _minimumWithdrawalAmount = 500.0;
+  bool _apiCanWithdraw = false;
+  int _dailyWithdrawalRequestLimit = 0;
+  int _requestsToday = 0;
+  int _remainingRequestsToday = 0;
   
   // Withdrawal form controllers
   final TextEditingController _amountController = TextEditingController();
@@ -49,100 +63,44 @@ class _WalletScreenState extends State<WalletScreen> {
   void initState() {
     super.initState();
     _fetchWalletBalance();
+    _fetchWithdrawalThreshold();
     _fetchWithdrawalRequests();
-    _initializeAds();
+    _fetchGiftVoucherRequests();
   }
 
-  void _initializeAds() {
-    MobileAds.instance.initialize().then((status) {
-      _loadRewardedAd();
-    });
-  }
-
-  void _loadRewardedAd() {
-    if (_isAdLoading) return;
-    
+  void _playWithdrawRewardedAd() {
+    if (_isAdLoading || _isSubmitting) return;
     setState(() {
       _isAdLoading = true;
-      _isAdLoaded = false;
     });
 
-    RewardedAd.load(
-      adUnitId: _rewardedAdUnitId,
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (RewardedAd ad) {
-          if (mounted) {
-            setState(() {
-              _rewardedAd = ad;
-              _isAdLoaded = true;
-              _isAdLoading = false;
-            });
-            
-            _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
-              onAdDismissedFullScreenContent: (RewardedAd ad) {
-                ad.dispose();
-                if (mounted) {
-                  setState(() {
-                    _rewardedAd = null;
-                    _isAdLoaded = false;
-                  });
-                  _loadRewardedAd();
-                }
-              },
-              onAdFailedToShowFullScreenContent: (RewardedAd ad, AdError error) {
-                ad.dispose();
-                if (mounted) {
-                  setState(() {
-                    _rewardedAd = null;
-                    _isAdLoaded = false;
-                  });
-                  Future.delayed(const Duration(seconds: 2), () {
-                    if (mounted) {
-                      _loadRewardedAd();
-                    }
-                  });
-                }
-              },
-            );
-          }
-        },
-        onAdFailedToLoad: (LoadAdError error) {
-          if (mounted) {
-            setState(() {
-              _isAdLoading = false;
-              _isAdLoaded = false;
-            });
-          }
-        },
-      ),
-    );
-  }
-
-  void _showRewardedAd({required VoidCallback onAdWatched}) {
-    if (_rewardedAd != null && _isAdLoaded) {
-      _rewardedAd!.show(
-        onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
-          // Ad watched successfully
-          onAdWatched();
-        },
-      );
-    } else {
-      // Ad not loaded, try to load it first
-      if (!_isAdLoading) {
-        _loadRewardedAd();
-      }
-      
-      if (mounted) {
+    GoogleMobileAdsService.instance.showRewardedAd(
+      onRewardEarned: () {
+        if (!mounted) return;
+        setState(() {
+          _isAdLoading = false;
+          _withdrawRewardedCompleted = true;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Ad is loading. Please wait...'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
+            content: Text('You can submit your withdrawal below.'),
+            backgroundColor: AppColors.green,
           ),
         );
-      }
-    }
+      },
+      onFailed: () {
+        if (!mounted) return;
+        setState(() {
+          _isAdLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ad not available. Try again in a moment.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -154,7 +112,6 @@ class _WalletScreenState extends State<WalletScreen> {
     _bankIFSCController.dispose();
     _bankNameController.dispose();
     _accountHolderController.dispose();
-    _rewardedAd?.dispose();
     super.dispose();
   }
 
@@ -233,6 +190,64 @@ class _WalletScreenState extends State<WalletScreen> {
     }
   }
 
+  double _asDouble(dynamic value, {double fallback = 0.0}) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? fallback;
+    return fallback;
+  }
+
+  int _asInt(dynamic value, {int fallback = 0}) {
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? fallback;
+    return fallback;
+  }
+
+  Future<void> _fetchWithdrawalThreshold() async {
+    setState(() {
+      _isLoadingThreshold = true;
+    });
+
+    try {
+      final token = await StorageService.getToken();
+      if (token == null || token.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _isLoadingThreshold = false;
+        });
+        return;
+      }
+
+      final result = await ApiService.getWithdrawalThreshold(token: token);
+      if (!mounted) return;
+
+      if (result['success'] == true && result['data'] != null) {
+        final data = result['data'] as Map<String, dynamic>;
+        setState(() {
+          _minimumWithdrawalAmount = _asDouble(
+            data['minimumWithdrawalAmount'],
+            fallback: _minimumWithdrawalAmount,
+          );
+          _dailyWithdrawalRequestLimit = _asInt(data['dailyWithdrawalRequestLimit']);
+          _requestsToday = _asInt(data['requestsToday']);
+          _remainingRequestsToday = _asInt(data['remainingRequestsToday']);
+          _apiCanWithdraw = data['canWithdraw'] == true;
+          _isLoadingThreshold = false;
+        });
+      } else {
+        setState(() {
+          _isLoadingThreshold = false;
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingThreshold = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -263,7 +278,9 @@ class _WalletScreenState extends State<WalletScreen> {
       body: RefreshIndicator(
         onRefresh: () async {
           await _fetchWalletBalance();
+          await _fetchWithdrawalThreshold();
           await _fetchWithdrawalRequests();
+          await _fetchGiftVoucherRequests();
         },
         child: SingleChildScrollView(
           child: Form(
@@ -303,36 +320,26 @@ class _WalletScreenState extends State<WalletScreen> {
                 const WithdrawalThreshold(),
                 const SizedBox(height: 24),
 
-                // Payment Method
-                PaymentMethodSection(
-                  selectedIndex: _selectedPaymentMethod,
-                  onChanged: (index) {
-                    setState(() => _selectedPaymentMethod = index);
-                  },
+                // Top-level withdrawal type selector (Gift Voucher / UPI / Bank)
+                WithdrawalTypeTabs(
+                  selectedIndex: _withdrawalType,
+                  onChanged: _onWithdrawalTypeChanged,
                 ),
                 const SizedBox(height: 24),
 
-                // Amount Input
-                _buildAmountInput(),
-                const SizedBox(height: 24),
+                // Mode-specific content.
+                ..._buildModeContent(),
 
-                // Payment Details Input
-                UPIInput(
-                  selectedPaymentMethod: _selectedPaymentMethod,
-                  upiIdController: _upiIdController,
-                  virtualIdController: _virtualIdController,
-                  bankAccountController: _bankAccountController,
-                  bankIFSCController: _bankIFSCController,
-                  bankNameController: _bankNameController,
-                  accountHolderController: _accountHolderController,
-                ),
                 const SizedBox(height: 24),
 
                 // Recent Transactions / Withdrawal Requests
-                RecentTransactions(
-                  withdrawalRequests: _withdrawalRequests,
-                  isLoading: _isLoadingRequests,
-                ),
+                if (_withdrawalType == 0)
+                  _buildGiftVoucherRequestsList()
+                else
+                  RecentTransactions(
+                    withdrawalRequests: _withdrawalRequests,
+                    isLoading: _isLoadingRequests,
+                  ),
                 const SizedBox(height: 100),
                 ],
               ),
@@ -379,7 +386,327 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
+  /// Build the mode-specific section between the type tabs and the
+  /// request history. Returns a list of widgets so the caller can spread
+  /// them into a column without wrapping a Column-in-Column.
+  List<Widget> _buildModeContent() {
+    switch (_withdrawalType) {
+      case 0: // Gift Voucher Withdraw.
+        return [
+          GiftVoucherForm(
+            selectedBrand: _selectedGiftBrand,
+            selectedAmount: _selectedGiftAmount,
+            walletBalance: _walletBalance,
+            onBrandSelected: (brand) {
+              setState(() => _selectedGiftBrand = brand);
+            },
+            onAmountSelected: (amount) {
+              setState(() => _selectedGiftAmount = amount);
+            },
+          ),
+        ];
+      case 1: // UPI Withdraw — only UPI / VPA.
+        return [
+          _buildAmountInput(),
+          const SizedBox(height: 24),
+          UPIInput(
+            selectedPaymentMethod: 0,
+            upiIdController: _upiIdController,
+            virtualIdController: _virtualIdController,
+            bankAccountController: _bankAccountController,
+            bankIFSCController: _bankIFSCController,
+            bankNameController: _bankNameController,
+            accountHolderController: _accountHolderController,
+          ),
+        ];
+      case 2: // Bank Withdraw.
+      default:
+        return [
+          _buildAmountInput(),
+          const SizedBox(height: 24),
+          UPIInput(
+            selectedPaymentMethod: 3,
+            upiIdController: _upiIdController,
+            virtualIdController: _virtualIdController,
+            bankAccountController: _bankAccountController,
+            bankIFSCController: _bankIFSCController,
+            bankNameController: _bankNameController,
+            accountHolderController: _accountHolderController,
+          ),
+        ];
+    }
+  }
+
+  void _onWithdrawalTypeChanged(int index) {
+    if (index == _withdrawalType) return;
+    setState(() {
+      _withdrawalType = index;
+      if (index == 1) {
+        _selectedPaymentMethod = 0; // UPI / VPA
+      } else if (index == 2) {
+        _selectedPaymentMethod = 3; // Bank Transfer
+      }
+    });
+  }
+
+  Future<void> _fetchGiftVoucherRequests() async {
+    setState(() {
+      _isLoadingGiftVoucherRequests = true;
+    });
+    try {
+      final token = await StorageService.getToken();
+      if (token == null || token.isEmpty) {
+        if (!mounted) return;
+        setState(() => _isLoadingGiftVoucherRequests = false);
+        return;
+      }
+      final result = await ApiService.getGiftVoucherRequests(token: token);
+      if (!mounted) return;
+      if (result['success'] == true && result['data'] != null) {
+        setState(() {
+          _giftVoucherRequests = List<Map<String, dynamic>>.from(
+              result['data']['requests'] ?? []);
+          _isLoadingGiftVoucherRequests = false;
+        });
+      } else {
+        setState(() => _isLoadingGiftVoucherRequests = false);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingGiftVoucherRequests = false);
+    }
+  }
+
+  Widget _buildGiftVoucherRequestsList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'My Gift Voucher Requests',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (_isLoadingGiftVoucherRequests)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        else if (_giftVoucherRequests.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground(context),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.card_giftcard,
+                    color: Colors.grey.shade500, size: 32),
+                const SizedBox(height: 8),
+                Text(
+                  'No gift voucher requests yet.',
+                  style: TextStyle(
+                    color: Colors.grey.shade400,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _giftVoucherRequests.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              return _buildGiftVoucherRequestTile(_giftVoucherRequests[index]);
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildGiftVoucherRequestTile(Map<String, dynamic> req) {
+    final brand = (req['brand'] ?? '').toString();
+    final amount = req['amount'];
+    final status = (req['status'] ?? 'Pending').toString();
+    final voucherCode = req['voucherCode']?.toString();
+    final createdAt = req['createdAt']?.toString();
+
+    String formattedDate = '';
+    if (createdAt != null && createdAt.isNotEmpty) {
+      try {
+        final dt = DateTime.parse(createdAt);
+        formattedDate = DateFormat('MMM d, yyyy • h:mm a').format(dt);
+      } catch (_) {
+        formattedDate = createdAt;
+      }
+    }
+
+    Color statusColor;
+    switch (status.toLowerCase()) {
+      case 'delivered':
+        statusColor = AppColors.green;
+        break;
+      case 'approved':
+        statusColor = AppColors.primary;
+        break;
+      case 'rejected':
+        statusColor = Colors.red;
+        break;
+      case 'pending':
+      default:
+        statusColor = AppColors.orange;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground(context),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.card_giftcard,
+                    color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      brand,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      formattedDate,
+                      style: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '₹${amount ?? ''}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      status,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          if (voucherCode != null && voucherCode.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.green.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.green.withOpacity(0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.confirmation_number,
+                      color: AppColors.green, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      voucherCode,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: voucherCode));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Voucher code copied!'),
+                          backgroundColor: AppColors.green,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.green.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.copy_rounded,
+                          color: AppColors.green, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Future<void> _submitWithdrawalRequest() async {
+    // Gift voucher flow has its own validation/submission path.
+    if (_withdrawalType == 0) {
+      await _submitGiftVoucherRequest();
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -416,15 +743,45 @@ class _WalletScreenState extends State<WalletScreen> {
       return;
     }
 
+    if (amount < _minimumWithdrawalAmount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Minimum withdrawal amount is ₹${_minimumWithdrawalAmount.toStringAsFixed(2)}',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_remainingRequestsToday <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _dailyWithdrawalRequestLimit > 0
+                ? 'Daily withdrawal request limit reached ($_requestsToday/$_dailyWithdrawalRequestLimit). Try tomorrow.'
+                : 'Daily withdrawal request limit reached. Try tomorrow.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (!_apiCanWithdraw) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Withdrawal is currently not allowed as per server limits.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     // Validate payment method specific fields
     String paymentMethod = 'UPI';
-    if (_selectedPaymentMethod == 0) {
-      paymentMethod = 'UPI';
-    } else if (_selectedPaymentMethod == 1) {
-      paymentMethod = 'Paytm';
-    } else if (_selectedPaymentMethod == 2) {
-      paymentMethod = 'Google Pay';
-    } else if (_selectedPaymentMethod == 3) {
+    if (_selectedPaymentMethod == 3) {
       paymentMethod = 'BankTransfer';
     }
 
@@ -453,13 +810,176 @@ class _WalletScreenState extends State<WalletScreen> {
       }
     }
 
-    // Show rewarded ad before submitting withdrawal request
-    _showRewardedAd(
-      onAdWatched: () {
-        // After ad is watched, proceed with withdrawal submission
-        _processWithdrawalRequest(amount, paymentMethod);
-      },
+    if (!_withdrawRewardedCompleted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please watch the rewarded ad above first.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    _processWithdrawalRequest(amount, paymentMethod);
+  }
+
+  /// Validate the gift voucher selection, deduct the wallet balance, and
+  /// persist the request via the gift voucher API.
+  Future<void> _submitGiftVoucherRequest() async {
+    final brand = _selectedGiftBrand;
+    final amount = _selectedGiftAmount;
+
+    if (brand == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a gift voucher brand.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    if (amount == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a denomination.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    if (amount > _walletBalance) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Insufficient balance. Available: ₹${_walletBalance.toStringAsFixed(0)}, Requested: ₹$amount',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    if (_remainingRequestsToday <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _dailyWithdrawalRequestLimit > 0
+                ? 'Daily withdrawal request limit reached ($_requestsToday/$_dailyWithdrawalRequestLimit). Try tomorrow.'
+                : 'Daily withdrawal request limit reached. Try tomorrow.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    if (!_withdrawRewardedCompleted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please watch the rewarded ad above first.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Confirm with the user.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.cardBackground(ctx),
+        title: const Text(
+          'Confirm Gift Voucher',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          'Redeem a $brand voucher for ₹$amount?\n\n₹$amount will be deducted from your wallet immediately. The request will be set to "Pending" until admin approval.',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
     );
+    if (confirmed != true) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      final token = await StorageService.getToken();
+      if (token == null || token.isEmpty) {
+        if (!mounted) return;
+        setState(() => _isSubmitting = false);
+        return;
+      }
+
+      final result = await ApiService.submitGiftVoucherRequest(
+        token: token,
+        brand: brand,
+        amount: amount,
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true && result['data'] != null) {
+        final data = result['data'];
+        final remainingBalance = data['remainingWalletBalance'];
+        if (remainingBalance != null) {
+          setState(() {
+            _walletBalance = _asDouble(remainingBalance,
+                fallback: _walletBalance);
+          });
+        }
+
+        // Reset selection.
+        setState(() {
+          _selectedGiftBrand = null;
+          _selectedGiftAmount = null;
+          _withdrawRewardedCompleted = false;
+        });
+
+        await _fetchWithdrawalThreshold();
+        await _fetchGiftVoucherRequests();
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ??
+                'Gift voucher request submitted successfully'),
+            backgroundColor: AppColors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ??
+                'Failed to submit gift voucher request'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   Future<void> _processWithdrawalRequest(double amount, String paymentMethod) async {
@@ -514,9 +1034,13 @@ class _WalletScreenState extends State<WalletScreen> {
         _accountHolderController.clear();
 
         // Refresh withdrawal requests
+        await _fetchWithdrawalThreshold();
         await _fetchWithdrawalRequests();
 
         if (mounted) {
+          setState(() {
+            _withdrawRewardedCompleted = false;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(result['message'] ?? 'Withdrawal request submitted successfully'),
@@ -586,72 +1110,160 @@ class _WalletScreenState extends State<WalletScreen> {
     }
   }
 
-  void _showCoinConversionDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => CoinConversionDialog(
-        currentCoins: _coins,
-        onConversionSuccess: () {
-          // Refresh wallet balance after conversion
-          _fetchWalletBalance();
-        },
+  Widget _buildWithdrawRewardedStrip() {
+    return Material(
+      color: AppColors.cardBackground(context),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: (_isAdLoading || _isSubmitting) ? null : _playWithdrawRewardedAd,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(
+                Icons.play_circle_filled,
+                color: AppColors.primary,
+                size: 36,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Rewarded ad',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _withdrawRewardedCompleted
+                          ? 'Done — tap Withdraw Money below'
+                          : 'Watch this ad first, then withdraw',
+                      style: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_isAdLoading)
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              else if (_withdrawRewardedCompleted)
+                const Icon(Icons.check_circle, color: AppColors.green, size: 28),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildWithdrawButton() {
+    final isGiftVoucher = _withdrawalType == 0;
+    final hasGiftSelection =
+        _selectedGiftBrand != null && _selectedGiftAmount != null;
+
+    final canWithdraw = _withdrawRewardedCompleted &&
+        !_isSubmitting &&
+        !_isLoadingThreshold &&
+        _remainingRequestsToday > 0 &&
+        (isGiftVoucher ? hasGiftSelection : _apiCanWithdraw);
+
+    final buttonLabel = isGiftVoucher ? 'Confirm Voucher' : 'Withdraw Money';
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: BoxDecoration(
         color: AppColors.background(context),
       ),
       child: SafeArea(
-        child: GestureDetector(
-          onTap: _isSubmitting ? null : _submitWithdrawalRequest,
-          child: Opacity(
-            opacity: _isSubmitting ? 0.5 : 1.0,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                gradient: AppColors.buttonGradient,
-                borderRadius: BorderRadius.circular(30),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildWithdrawRewardedStrip(),
+            const SizedBox(height: 12),
+            if (_isLoadingThreshold)
+              const Text(
+                'Checking withdrawal limits...',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              )
+            else
+              Text(
+                _dailyWithdrawalRequestLimit > 0
+                    ? 'Requests today: $_requestsToday/$_dailyWithdrawalRequestLimit (remaining: $_remainingRequestsToday)'
+                    : 'Requests remaining today: $_remainingRequestsToday',
+                style: TextStyle(
+                  color: (_remainingRequestsToday > 0 && _apiCanWithdraw)
+                      ? Colors.white70
+                      : Colors.orangeAccent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-              child: _isSubmitting
-                  ? const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: canWithdraw ? _submitWithdrawalRequest : null,
+              child: Opacity(
+                opacity: _isSubmitting || canWithdraw ? 1.0 : 0.45,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.buttonGradient,
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: _isSubmitting
+                      ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              buttonLabel,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              isGiftVoucher
+                                  ? Icons.card_giftcard
+                                  : Icons.arrow_forward,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ],
                         ),
-                      ],
-                    )
-                  : const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Withdraw Money',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Icon(
-                          Icons.arrow_forward,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ],
-                    ),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

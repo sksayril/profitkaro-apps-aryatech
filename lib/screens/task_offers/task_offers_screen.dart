@@ -4,6 +4,7 @@ import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
 import '../../core/services/tapjoy_service.dart';
 import '../../core/services/bitlabs_service.dart';
+import '../../core/services/theoremreach_service.dart';
 import 'task_details_screen.dart';
 
 class TaskOffersScreen extends StatefulWidget {
@@ -216,6 +217,70 @@ class _TaskOffersScreenState extends State<TaskOffersScreen> with SingleTickerPr
     }
   }
 
+  Future<void> _openTheoremReachOfferwall() async {
+    // Show loading indicator
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    try {
+      // Step 1: Check availability first as recommended
+      final result = await TheoremReachService.checkSurveyAvailability();
+      
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog
+      }
+
+      if (result['available']) {
+        // Step 2: Launch offerwall
+        await TheoremReachService.showOfferwall();
+      } else {
+        // Show unavailable message
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: AppColors.cardBackground(context),
+              title: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: AppColors.orange),
+                  SizedBox(width: 8),
+                  Text('TheoremReach', style: TextStyle(color: Colors.white)),
+                ],
+              ),
+              content: const Text(
+                'No surveys are currently available for you in TheoremReach. Please check back later.',
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK', style: TextStyle(color: AppColors.primary)),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog if still open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
 
   String _getButtonText(String userStatus, bool canSubmit) {
     if (userStatus == 'approved') {
@@ -270,6 +335,8 @@ class _TaskOffersScreenState extends State<TaskOffersScreen> with SingleTickerPr
                 _openTapjoyOfferwall();
               } else if (value == 'bitlabs') {
                 _openBitLabsOfferwall();
+              } else if (value == 'theoremreach') {
+                _openTheoremReachOfferwall();
               }
             },
             itemBuilder: (context) => [
@@ -290,6 +357,16 @@ class _TaskOffersScreenState extends State<TaskOffersScreen> with SingleTickerPr
                     Icon(Icons.card_giftcard, size: 20),
                     SizedBox(width: 8),
                     Text('BitLabs Offerwall'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'theoremreach',
+                child: Row(
+                  children: [
+                    Icon(Icons.assignment, size: 20),
+                    SizedBox(width: 8),
+                    Text('TheoremReach Surveys'),
                   ],
                 ),
               ),
@@ -520,23 +597,30 @@ class _TaskOffersScreenState extends State<TaskOffersScreen> with SingleTickerPr
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Text(
-                          '$difficulty',
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 12,
-                          ),
-                        ),
-                        if (description.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            '• $description',
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: Text(
+                            '$difficulty',
                             style: TextStyle(
                               color: Colors.grey.shade500,
                               fontSize: 12,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (description.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '• $description',
+                              style: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ],

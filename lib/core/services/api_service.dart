@@ -452,6 +452,90 @@ class ApiService {
     }
   }
 
+  /// POST /users/gift-voucher/request — submit a gift voucher redemption.
+  ///
+  /// `brand` must be one of: `Amazon`, `Flipkart`, `GooglePlay`, `Paytm`.
+  /// `amount` must be one of the allowed denominations enforced by the
+  /// backend (currently 10, 20, 30, 50).
+  static Future<Map<String, dynamic>> submitGiftVoucherRequest({
+    required String token,
+    required String brand,
+    required int amount,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/users/gift-voucher/request'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'Brand': brand,
+          'Amount': amount,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'],
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to submit gift voucher request',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  /// GET /users/gift-voucher/requests — list the user's gift voucher
+  /// requests (Pending / Approved / Rejected / Delivered). The
+  /// `voucherCode` field is only returned when status is `Delivered`.
+  static Future<Map<String, dynamic>> getGiftVoucherRequests({
+    required String token,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/gift-voucher/requests'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'],
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to fetch gift voucher requests',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
   // Get user profile endpoint
   static Future<Map<String, dynamic>> getUserProfile({
     required String token,
@@ -1416,6 +1500,192 @@ class ApiService {
           'error': data['error'],
         };
       }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Evaluate ads decision endpoint
+  static Future<Map<String, dynamic>> getAdsDecision({
+    required String token,
+    required String taskType,
+    required int actionCount,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/users/ads/decision').replace(
+        queryParameters: {
+          'taskType': taskType,
+          'actionCount': actionCount.toString(),
+        },
+      );
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Ads decision evaluated successfully',
+          'data': data['data'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to evaluate ads decision',
+          'error': data['error'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Fetch quiz settings from the task-controls API.
+  /// Filters the response array for `TaskType: "Quiz"`.
+  static Future<Map<String, dynamic>> getQuizSettingsPublic() async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/users/task-controls/public'),
+            headers: const {'Content-Type': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 15));
+
+      dynamic raw;
+      try {
+        raw = jsonDecode(response.body);
+      } catch (_) {
+        return {
+          'success': false,
+          'message': 'Invalid response from server',
+        };
+      }
+
+      if (response.statusCode == 200 && raw is Map<String, dynamic>) {
+        final dataList = raw['data'];
+        if (dataList is List) {
+          final quizEntry = dataList.firstWhere(
+            (item) => item is Map && item['TaskType'] == 'Quiz',
+            orElse: () => null,
+          );
+          if (quizEntry != null && quizEntry is Map) {
+            return {
+              'success': true,
+              'message': 'Quiz settings retrieved successfully',
+              'data': Map<String, dynamic>.from(quizEntry),
+            };
+          }
+        }
+        return {
+          'success': false,
+          'message': 'Quiz task control not found',
+        };
+      }
+
+      return {
+        'success': false,
+        'message': raw is Map && raw['message'] != null
+            ? raw['message'].toString()
+            : 'Failed to load quiz settings',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Public home popup template (no auth). See `PopupTemplatePublic`.
+  static Future<Map<String, dynamic>> getPopupTemplatePublic() async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/users/popup-template/public'),
+            headers: const {'Content-Type': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 15));
+
+      dynamic raw;
+      try {
+        raw = jsonDecode(response.body);
+      } catch (_) {
+        return {
+          'success': false,
+          'message': 'Invalid response from server',
+        };
+      }
+      final data = raw;
+
+      if (response.statusCode == 200 && data is Map<String, dynamic>) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Popup template retrieved successfully',
+          'data': data['data'],
+        };
+      }
+
+      return {
+        'success': false,
+        'message': data is Map && data['message'] != null
+            ? data['message'].toString()
+            : 'Failed to load popup template',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Public Telegram / YouTube / Instagram URLs (no auth).
+  static Future<Map<String, dynamic>> getSocialLinksPublic() async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/users/social-links/public'),
+            headers: const {'Content-Type': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 15));
+
+      dynamic raw;
+      try {
+        raw = jsonDecode(response.body);
+      } catch (_) {
+        return {
+          'success': false,
+          'message': 'Invalid response from server',
+        };
+      }
+      final data = raw;
+
+      if (response.statusCode == 200 && data is Map<String, dynamic>) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Social links retrieved successfully',
+          'data': data['data'],
+        };
+      }
+
+      return {
+        'success': false,
+        'message': data is Map && data['message'] != null
+            ? data['message'].toString()
+            : 'Failed to load social links',
+      };
     } catch (e) {
       return {
         'success': false,

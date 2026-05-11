@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+import '../../core/services/task_completion_ads_service.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
@@ -19,12 +19,6 @@ class _ScratchCardDailyLimitScreenState extends State<ScratchCardDailyLimitScree
   bool _isClaimed = false;
   List<List<Offset>> _scratchPaths = [];
   final GlobalKey _scratchKey = GlobalKey();
-  
-  // AdMob Configuration
-  static const String _rewardedAdUnitId = 'ca-app-pub-4532355113190688/5923175121';
-  RewardedAd? _rewardedAd;
-  bool _isAdLoaded = false;
-  bool _isAdLoading = false;
   
   // Animation
   late AnimationController _flipController;
@@ -46,7 +40,6 @@ class _ScratchCardDailyLimitScreenState extends State<ScratchCardDailyLimitScree
   @override
   void initState() {
     super.initState();
-    _initializeAds();
     _fetchDailyLimit();
     
     _flipController = AnimationController(
@@ -61,89 +54,8 @@ class _ScratchCardDailyLimitScreenState extends State<ScratchCardDailyLimitScree
 
   @override
   void dispose() {
-    _rewardedAd?.dispose();
     _flipController.dispose();
     super.dispose();
-  }
-
-  void _initializeAds() {
-    MobileAds.instance.initialize().then((status) {
-      _loadRewardedAd();
-    });
-  }
-
-  void _loadRewardedAd() {
-    if (_isAdLoading) return;
-    
-    setState(() {
-      _isAdLoading = true;
-      _isAdLoaded = false;
-    });
-
-    RewardedAd.load(
-      adUnitId: _rewardedAdUnitId,
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (RewardedAd ad) {
-          setState(() {
-            _rewardedAd = ad;
-            _isAdLoaded = true;
-            _isAdLoading = false;
-          });
-          
-          _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
-            onAdDismissedFullScreenContent: (RewardedAd ad) {
-              ad.dispose();
-              if (mounted) {
-                setState(() {
-                  _rewardedAd = null;
-                  _isAdLoaded = false;
-                });
-                _loadRewardedAd();
-              }
-            },
-            onAdFailedToShowFullScreenContent: (RewardedAd ad, AdError error) {
-              ad.dispose();
-              if (mounted) {
-                setState(() {
-                  _rewardedAd = null;
-                  _isAdLoaded = false;
-                });
-                _loadRewardedAd();
-              }
-            },
-          );
-        },
-        onAdFailedToLoad: (LoadAdError error) {
-          setState(() {
-            _isAdLoading = false;
-            _isAdLoaded = false;
-          });
-        },
-      ),
-    );
-  }
-
-  void _showRewardedAd({required VoidCallback onAdWatched}) {
-    if (_rewardedAd != null && _isAdLoaded) {
-      _rewardedAd!.show(
-        onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
-          onAdWatched();
-        },
-      );
-    } else {
-      // Ad not ready, show message and proceed
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ad is loading... Proceeding anyway'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-      }
-      onAdWatched();
-      _loadRewardedAd();
-    }
   }
 
   Future<void> _fetchDailyLimit() async {
@@ -212,12 +124,7 @@ class _ScratchCardDailyLimitScreenState extends State<ScratchCardDailyLimitScree
 
   Future<void> _claimReward() async {
     if (_isClaimed || _isClaiming || !_canClaim) return;
-
-    _showRewardedAd(
-      onAdWatched: () {
-        _processClaim();
-      },
-    );
+    _processClaim();
   }
 
   Future<void> _processClaim() async {
@@ -251,7 +158,13 @@ class _ScratchCardDailyLimitScreenState extends State<ScratchCardDailyLimitScree
         });
         
         if (mounted) {
-          _showRewardPopup(amountRevealed, coinsRevealed);
+          TaskCompletionAdsService.instance.runAfterTaskCompleted(
+            () {
+              if (!mounted) return;
+              _showRewardPopup(amountRevealed, coinsRevealed);
+            },
+            taskType: 'ScratchCardDailyLimit',
+          );
         }
       } else {
         setState(() {

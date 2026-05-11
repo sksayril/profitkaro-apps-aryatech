@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/models/social_links_public.dart';
+import '../../core/services/social_links_public_service.dart';
 import '../../core/services/social_rewards_service.dart';
 
 class CustomBottomNavBar extends StatelessWidget {
@@ -38,12 +40,10 @@ class CustomBottomNavBar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           // Only show social media links on home screen (index 0)
-          if (currentIndex == 0) ...[
-            const _SocialLinksRow(),
-            const SizedBox(height: 10),
-          ],
+          if (currentIndex == 0) const _SocialLinksRow(),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               _buildNavItem(
                 context,
@@ -59,16 +59,17 @@ class CustomBottomNavBar extends StatelessWidget {
                 unselectedIcon: Icons.account_balance_wallet_outlined,
                 label: 'Wallet',
               ),
+              _buildCenterAnnouncementItem(context, index: 2),
               _buildNavItem(
                 context,
-                index: 2,
+                index: 3,
                 selectedIcon: Icons.history_rounded,
                 unselectedIcon: Icons.history_outlined,
                 label: 'History',
               ),
               _buildNavItem(
                 context,
-                index: 3,
+                index: 4,
                 selectedIcon: Icons.person_rounded,
                 unselectedIcon: Icons.person_outline_rounded,
                 label: 'Profile',
@@ -80,12 +81,105 @@ class CustomBottomNavBar extends StatelessWidget {
     );
   }
 
+  Widget _buildCenterAnnouncementItem(BuildContext context, {required int index}) {
+    final isSelected = currentIndex == index;
+    const purpleColor = Color(0xFF5B4FCF);
+    const purpleGlow = Color(0xFF7C6FE0);
+
+    return GestureDetector(
+      onTap: () => onTap(index),
+      child: SizedBox(
+        width: 64,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Transform.translate(
+              offset: const Offset(0, -18),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected ? purpleGlow : purpleColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: purpleColor.withOpacity(isSelected ? 0.7 : 0.45),
+                      blurRadius: isSelected ? 20 : 12,
+                      spreadRadius: isSelected ? 3 : 1,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: AnimatedRotation(
+                  turns: isSelected ? 0.03 : 0.0,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOut,
+                  child: AnimatedScale(
+                    scale: isSelected ? 1.16 : 1.0,
+                    duration: const Duration(milliseconds: 320),
+                    curve: Curves.elasticOut,
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFFF59D), Color(0xFFFFD54F), Color(0xFFFFB300)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        border: Border.all(
+                          color: const Color(0xFFFFE082),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFFC107).withOpacity(isSelected ? 0.7 : 0.45),
+                            blurRadius: isSelected ? 14 : 8,
+                            spreadRadius: isSelected ? 2 : 1,
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.monetization_on_rounded,
+                          color: Color(0xFF8D5B00),
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Transform.translate(
+              offset: const Offset(0, -14),
+              child: AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                style: TextStyle(
+                  color: isSelected ? purpleGlow : Colors.grey.shade600,
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  fontFamily: 'Inter',
+                ),
+                child: const Text('Hot Task'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildNavItem(
     BuildContext context, {
     required int index,
     required IconData selectedIcon,
     required IconData unselectedIcon,
     required String label,
+    String? iconAssetPath,
   }) {
     final isSelected = currentIndex == index;
     final selectedColor = AppColors.primary;
@@ -123,13 +217,21 @@ class CustomBottomNavBar extends StatelessWidget {
                       duration: const Duration(milliseconds: 400),
                       curve: Curves.elasticOut,
                       builder: (context, scale, child) {
+                        final iconColor =
+                            isSelected ? selectedColor : unselectedColor;
                         return Transform.scale(
                           scale: scale,
-                          child: Icon(
-                            isSelected ? selectedIcon : unselectedIcon,
-                            color: isSelected ? selectedColor : unselectedColor,
-                            size: 24,
-                          ),
+                          child: iconAssetPath != null
+                              ? ImageIcon(
+                                  AssetImage(iconAssetPath),
+                                  color: iconColor,
+                                  size: 24,
+                                )
+                              : Icon(
+                                  isSelected ? selectedIcon : unselectedIcon,
+                                  color: iconColor,
+                                  size: 24,
+                                ),
                         );
                       },
                     ),
@@ -163,6 +265,7 @@ class _SocialLinksRow extends StatefulWidget {
 }
 
 class _SocialLinksRowState extends State<_SocialLinksRow> {
+  SocialLinksPublic _links = SocialLinksPublic.defaults();
   bool _telegramAvailable = true;
   bool _youtubeAvailable = true;
   bool _instagramAvailable = true;
@@ -171,7 +274,20 @@ class _SocialLinksRowState extends State<_SocialLinksRow> {
   @override
   void initState() {
     super.initState();
-    _loadAvailability();
+    _bootstrapLinks();
+  }
+
+  Future<void> _bootstrapLinks() async {
+    final cached = await SocialLinksPublicService.instance.loadCachedOrDefaults();
+    if (!mounted) return;
+    setState(() => _links = cached);
+    await _loadAvailability();
+
+    final fresh =
+        await SocialLinksPublicService.instance.fetchAndRefreshCache();
+    if (!mounted || fresh == null) return;
+    setState(() => _links = fresh);
+    await _loadAvailability();
   }
 
   Future<void> _loadAvailability() async {
@@ -250,59 +366,78 @@ class _SocialLinksRowState extends State<_SocialLinksRow> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF141426),
-        borderRadius: BorderRadius.circular(50),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildSocialButton(
+    if (!_links.isActive || !_links.hasAnyLink) {
+      return const SizedBox.shrink();
+    }
+
+    final tgUrl = _links.telegramLink.trim();
+    final ytUrl = _links.youtubeLink.trim();
+    final igUrl = _links.instagramLink.trim();
+
+    final children = <Widget>[
+      if (tgUrl.isNotEmpty)
+        _buildSocialButton(
+          context,
+          icon: Icons.send_rounded,
+          color: const Color(0xFF29B6F6),
+          label: 'Telegram',
+          coinsLabel: _telegramAvailable ? '+10 Coins' : 'Claimed',
+          enabled: _telegramAvailable && tgUrl.isNotEmpty,
+          onTap: () => _handleTap(
             context,
-            icon: Icons.send_rounded,
-            color: const Color(0xFF29B6F6), // Telegram-like blue
-            label: 'Telegram',
-            coinsLabel: _telegramAvailable ? '+10 Coins' : 'Claimed',
-            enabled: _telegramAvailable,
-            onTap: () => _handleTap(
-              context,
-              platform: SocialPlatform.telegram,
-              url: 'https://t.me/profitkaroofficial',
-              name: 'Telegram',
-            ),
+            platform: SocialPlatform.telegram,
+            url: tgUrl,
+            name: 'Telegram',
           ),
-          _buildSocialButton(
+        ),
+      if (ytUrl.isNotEmpty)
+        _buildSocialButton(
+          context,
+          icon: Icons.play_circle_fill_rounded,
+          color: const Color(0xFFFF5252),
+          label: 'YouTube',
+          coinsLabel: _youtubeAvailable ? '+10 Coins' : 'Claimed',
+          enabled: _youtubeAvailable && ytUrl.isNotEmpty,
+          onTap: () => _handleTap(
             context,
-            icon: Icons.play_circle_fill_rounded,
-            color: const Color(0xFFFF5252), // YouTube-like red
-            label: 'YouTube',
-            coinsLabel: _youtubeAvailable ? '+10 Coins' : 'Claimed',
-            enabled: _youtubeAvailable,
-            onTap: () => _handleTap(
-              context,
-              platform: SocialPlatform.youtube,
-              url: 'https://youtube.com/@profitkaroindia?si=g4yyqZKqsbYKtbsc',
-              name: 'YouTube',
-            ),
+            platform: SocialPlatform.youtube,
+            url: ytUrl,
+            name: 'YouTube',
           ),
-          _buildSocialButton(
+        ),
+      if (igUrl.isNotEmpty)
+        _buildSocialButton(
+          context,
+          icon: Icons.camera_alt_rounded,
+          color: const Color(0xFFFFA726),
+          label: 'Instagram',
+          coinsLabel: _instagramAvailable ? '+10 Coins' : 'Claimed',
+          enabled: _instagramAvailable && igUrl.isNotEmpty,
+          onTap: () => _handleTap(
             context,
-            icon: Icons.camera_alt_rounded,
-            color: const Color(0xFFFFA726), // Instagram-like gradient approximated
-            label: 'Instagram',
-            coinsLabel: _instagramAvailable ? '+10 Coins' : 'Claimed',
-            enabled: _instagramAvailable,
-            onTap: () => _handleTap(
-              context,
-              platform: SocialPlatform.instagram,
-              url:
-                  'https://www.instagram.com/profitkaroindia?igsh=MWNseXo3Zmp3ODhwcQ==',
-              name: 'Instagram',
-            ),
+            platform: SocialPlatform.instagram,
+            url: igUrl,
+            name: 'Instagram',
           ),
-        ],
+        ),
+    ];
+
+    if (children.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141426),
+          borderRadius: BorderRadius.circular(50),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: children,
+        ),
       ),
     );
   }

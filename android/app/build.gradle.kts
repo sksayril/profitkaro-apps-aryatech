@@ -65,16 +65,6 @@ flutter {
 }
 
 dependencies {
-    // Firebase SDK for Google Analytics
-    implementation("com.google.firebase:firebase-analytics:21.6.2")
-    // Tapjoy SDK
+    // Tapjoy SDK - Required for MainActivity.kt
     implementation("com.tapjoy:tapjoy-android-sdk:14.4.0")
-    // Firebase SDK for other Firebase products
-    // Uncomment and add other Firebase dependencies as needed:
-    // implementation("com.google.firebase:firebase-auth:22.3.1")
-    // implementation("com.google.firebase:firebase-firestore:24.11.0")
-    // implementation("com.google.firebase:firebase-messaging:23.4.1")
-    // implementation("com.google.firebase:firebase-storage:20.3.0")
-    // implementation("com.google.firebase:firebase-crashlytics:18.6.4")
-    // For more Firebase libraries, see: https://firebase.google.com/docs/android/setup#available-libraries
 }

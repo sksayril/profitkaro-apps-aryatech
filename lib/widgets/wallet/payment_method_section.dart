@@ -5,10 +5,16 @@ class PaymentMethodSection extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onChanged;
 
+  /// When false, the Bank Transfer card is hidden and the third UPI option
+  /// (Google Pay) takes the second slot of the second row alone. Useful when
+  /// the parent screen has a separate top-level "Bank Withdraw" mode.
+  final bool showBankCard;
+
   const PaymentMethodSection({
     super.key,
     required this.selectedIndex,
     required this.onChanged,
+    this.showBankCard = true,
   });
 
   @override
@@ -35,56 +41,13 @@ class PaymentMethodSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _PaymentMethodCard(
-                index: 0,
-                icon: Icons.qr_code_2,
-                label: 'UPI / VPA',
-                iconColor: AppColors.purple,
-                isSelected: selectedIndex == 0,
-                onTap: () => onChanged(0),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _PaymentMethodCard(
-                index: 1,
-                icon: Icons.account_balance_wallet,
-                label: 'Paytm',
-                iconColor: AppColors.primary,
-                isSelected: selectedIndex == 1,
-                onTap: () => onChanged(1),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _PaymentMethodCard(
-                index: 2,
-                icon: Icons.g_mobiledata,
-                label: 'Google Pay',
-                iconColor: AppColors.secondary,
-                isSelected: selectedIndex == 2,
-                onTap: () => onChanged(2),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _PaymentMethodCard(
-                index: 3,
-                icon: Icons.account_balance,
-                label: 'Bank Transfer',
-                iconColor: AppColors.primary,
-                isSelected: selectedIndex == 3,
-                onTap: () => onChanged(3),
-              ),
-            ),
-          ],
+        _PaymentMethodCard(
+          index: 0,
+          icon: Icons.qr_code_2,
+          label: 'UPI / VPA',
+          iconColor: AppColors.purple,
+          isSelected: selectedIndex == 0,
+          onTap: () => onChanged(0),
         ),
       ],
     );

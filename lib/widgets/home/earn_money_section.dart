@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
-import '../../screens/music/music_screen.dart';
+import '../../core/services/pubscale_offerwall_service.dart';
 import '../../screens/math_quiz/math_quiz_screen.dart';
 import '../../screens/scratch_card/scratch_card_daily_limit_screen.dart';
 import '../../screens/captcha/captcha_screen.dart';
 import '../../screens/spin_wheel/spin_wheel_screen.dart';
 import '../../screens/task_offers/task_offers_screen.dart';
+
 
 class EarnMoneySection extends StatelessWidget {
   const EarnMoneySection({super.key});
@@ -109,25 +110,38 @@ class EarnMoneySection extends StatelessWidget {
               iconBgColor: AppColors.iconBgOrange,
               iconColor: AppColors.orange,
               title: 'App Install',
+              subtitle: 'High Reward Offers',
+              subtitleColor: AppColors.green,
+              onTap: () async {
+                final launched =
+                    await PubscaleOfferwallService.instance.launchOfferwall();
+                if (!launched && context.mounted) {
+                  final details = PubscaleOfferwallService.instance.lastError;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        details == null
+                            ? 'Unable to open App Install offers right now. Please try again.'
+                            : 'Unable to open App Install offers: $details',
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+            EarnMoneyCard(
+              icon: Icons.task_alt_rounded,
+              iconBgColor: AppColors.iconBgPurple,
+              iconColor: AppColors.purple,
+              title: 'Task',
               subtitle: 'High Reward',
               subtitleColor: AppColors.green,
+              isComingSoon: false,
               onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const TaskOffersScreen()),
                 );
-              },
-            ),
-            EarnMoneyCard(
-              icon: Icons.headphones_rounded,
-              iconBgColor: AppColors.iconBgPurple,
-              iconColor: AppColors.purple,
-              title: 'Music',
-              subtitle: 'Listen & Earn',
-              subtitleColor: Colors.grey.shade500,
-              isComingSoon: true,
-              onTap: () {
-                _showComingSoonDialog(context);
               },
             ),
             EarnMoneyCard(
@@ -179,6 +193,7 @@ class EarnMoneySection extends StatelessWidget {
     );
   }
 }
+
 
 class EarnMoneyCard extends StatelessWidget {
   final IconData icon;

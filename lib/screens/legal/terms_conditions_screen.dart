@@ -94,7 +94,7 @@ class TermsConditionsScreen extends StatelessWidget {
             _buildSection(
               title: '6. Advertisements',
               content:
-                  '• The App displays third-party advertisements through Google AdMob\n'
+                  '• The App displays third-party advertisements (for example through Google Mobile Ads)\n'
                   '• You may be required to watch ads to earn coins or unlock features\n'
                   '• We are not responsible for the content of third-party advertisements\n'
                   '• Ad availability may vary based on your location and device\n'

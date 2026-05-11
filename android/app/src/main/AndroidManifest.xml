@@ -49,6 +49,9 @@
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-7664893030317051~1681851676"/>
+        <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
         <meta-data
@@ -58,10 +61,7 @@
         <meta-data
             android:name="tapjoy.app.id"
             android:value="67d638fe-6b2a-4a61-9b81-92c25b3b0fa2"/>
-        <!-- AdMob App ID -->
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-4532355113190688~4971485294"/>
+
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

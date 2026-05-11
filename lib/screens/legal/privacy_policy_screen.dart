@@ -85,7 +85,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
               title: '6. Third-Party Services',
               content:
                   'Our app may contain links to third-party services, including:\n\n'
-                  '• Advertising networks (Google AdMob) for displaying ads\n'
+                  '• Advertising networks (for example Google Mobile Ads) for displaying ads\n'
                   '• Payment gateways for processing withdrawals\n'
                   '• Analytics services for understanding app usage\n\n'
                   'These third parties have their own privacy policies, and we encourage you to review them. We are not responsible for the privacy practices of third-party services.',

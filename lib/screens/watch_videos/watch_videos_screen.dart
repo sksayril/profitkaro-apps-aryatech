@@ -1,7 +1,12 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'dart:async';
+
+import '../../core/constants/ad_config.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/services/google_mobile_ads_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
 import '../../core/services/device_service.dart';
@@ -15,11 +20,10 @@ class WatchVideosScreen extends StatefulWidget {
 }
 
 class _WatchVideosScreenState extends State<WatchVideosScreen> {
-  // AdMob Configuration
-  static const String _rewardedAdUnitId = 'ca-app-pub-4532355113190688/5923175121';
-  RewardedAd? _rewardedAd;
-  bool _isAdLoaded = false;
   bool _isAdLoading = false;
+
+  NativeAd? _nativeAd;
+  bool _nativeLoaded = false;
   
   // Video watching state
   int _videosWatchedToday = 0;
@@ -37,7 +41,49 @@ class _WatchVideosScreenState extends State<WatchVideosScreen> {
   @override
   void initState() {
     super.initState();
+    _loadNativeAd();
     _initialize();
+  }
+
+  void _loadNativeAd() {
+    if (!GoogleMobileAdsService.instance.isEnabled) {
+      return;
+    }
+    if (kDebugMode) {
+      _nativeAd = NativeAd(
+        adUnitId: AdConfig.nativeAdUnitId,
+        listener: NativeAdListener(
+          onAdLoaded: (_) {
+            if (mounted) setState(() => _nativeLoaded = true);
+          },
+          onAdFailedToLoad: (ad, error) {
+            debugPrint('Watch Videos native ad failed: ${error.message}');
+            ad.dispose();
+          },
+        ),
+        request: const AdRequest(),
+        nativeTemplateStyle: NativeTemplateStyle(
+          templateType: TemplateType.medium,
+        ),
+      )..load();
+    } else {
+      _nativeAd = NativeAd.fromAdManagerRequest(
+        adUnitId: AdConfig.nativeUnitId,
+        listener: NativeAdListener(
+          onAdLoaded: (_) {
+            if (mounted) setState(() => _nativeLoaded = true);
+          },
+          onAdFailedToLoad: (ad, error) {
+            debugPrint('Watch Videos native ad (Ad Manager) failed: ${error.message}');
+            ad.dispose();
+          },
+        ),
+        adManagerRequest: const AdManagerAdRequest(),
+        nativeTemplateStyle: NativeTemplateStyle(
+          templateType: TemplateType.medium,
+        ),
+      )..load();
+    }
   }
 
   Future<void> _initialize() async {
@@ -50,8 +96,6 @@ class _WatchVideosScreenState extends State<WatchVideosScreen> {
     // Load video watching data from local storage
     await _loadVideoData();
     
-    // Initialize ads
-    _initializeAds();
     
     // Start countdown timer if in cooldown
     if (_cooldownUntil != null && _cooldownUntil!.isAfter(DateTime.now())) {
@@ -121,72 +165,6 @@ class _WatchVideosScreenState extends State<WatchVideosScreen> {
     }
   }
 
-  void _initializeAds() {
-    MobileAds.instance.initialize().then((status) {
-      _loadRewardedAd();
-    });
-  }
-
-  void _loadRewardedAd() {
-    if (_isAdLoading) return;
-    
-    setState(() {
-      _isAdLoading = true;
-      _isAdLoaded = false;
-    });
-
-    RewardedAd.load(
-      adUnitId: _rewardedAdUnitId,
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (RewardedAd ad) {
-          if (mounted) {
-            setState(() {
-              _rewardedAd = ad;
-              _isAdLoaded = true;
-              _isAdLoading = false;
-            });
-            
-            _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
-              onAdDismissedFullScreenContent: (RewardedAd ad) {
-                ad.dispose();
-                if (mounted) {
-                  setState(() {
-                    _rewardedAd = null;
-                    _isAdLoaded = false;
-                  });
-                  _loadRewardedAd();
-                }
-              },
-              onAdFailedToShowFullScreenContent: (RewardedAd ad, AdError error) {
-                ad.dispose();
-                if (mounted) {
-                  setState(() {
-                    _rewardedAd = null;
-                    _isAdLoaded = false;
-                  });
-                  Future.delayed(const Duration(seconds: 2), () {
-                    if (mounted) {
-                      _loadRewardedAd();
-                    }
-                  });
-                }
-              },
-            );
-          }
-        },
-        onAdFailedToLoad: (LoadAdError error) {
-          if (mounted) {
-            setState(() {
-              _isAdLoading = false;
-              _isAdLoaded = false;
-            });
-          }
-        },
-      ),
-    );
-  }
-
   void _startCountdownTimer() {
     _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -218,6 +196,18 @@ class _WatchVideosScreenState extends State<WatchVideosScreen> {
   }
 
   Future<void> _watchVideo() async {
+    if (!GoogleMobileAdsService.instance.isRewardedAdReady) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ad is loading, please try again in a moment.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
     // Check if daily limit reached
     if (_videosWatchedToday >= _dailyVideoLimit) {
       // Check if cooldown is active
@@ -234,30 +224,33 @@ class _WatchVideosScreenState extends State<WatchVideosScreen> {
       }
     }
     
-    // Show rewarded ad
-    if (_rewardedAd != null && _isAdLoaded) {
-      _rewardedAd!.show(
-        onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
-          // Video watched successfully
+    setState(() {
+      _isAdLoading = true;
+    });
+
+    await GoogleMobileAdsService.instance.showRewardedAd(
+      onRewardEarned: () {
+        if (mounted) {
+          setState(() {
+            _isAdLoading = false;
+          });
           _handleVideoWatched();
-        },
-      );
-    } else {
-      // Ad not loaded, try to load it first
-      if (!_isAdLoading) {
-        _loadRewardedAd();
-      }
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ad is loading. Please wait...'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    }
+        }
+      },
+      onFailed: () {
+        if (mounted) {
+          setState(() {
+            _isAdLoading = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to load video ad. Please try again later.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+    );
   }
 
   Future<void> _handleVideoWatched() async {
@@ -290,9 +283,6 @@ class _WatchVideosScreenState extends State<WatchVideosScreen> {
     
     // Save data
     await _saveVideoData();
-    
-    // Reload ad for next video
-    _loadRewardedAd();
   }
 
   Future<void> _addCoinsToWallet(int coins) async {
@@ -462,7 +452,7 @@ class _WatchVideosScreenState extends State<WatchVideosScreen> {
   @override
   void dispose() {
     _countdownTimer?.cancel();
-    _rewardedAd?.dispose();
+    _nativeAd?.dispose();
     super.dispose();
   }
 
@@ -494,42 +484,44 @@ class _WatchVideosScreenState extends State<WatchVideosScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Info Card
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFF39C12), Color(0xFFD35400)],
+                  // Compact copy — rewarded ad plays when user taps the button below
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.play_circle_outline,
+                        color: AppColors.primary,
+                        size: 40,
                       ),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Column(
-                      children: [
-                        const Icon(Icons.play_circle_fill, color: Colors.white, size: 64),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Watch Videos & Earn Coins',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Watch a rewarded ad',
+                              style: TextStyle(
+                                color: AppColors.textPrimary(context),
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Tap the button to earn $_coinsPerVideo coins per video (up to $_dailyVideoLimit per day).',
+                              style: TextStyle(
+                                color: AppColors.textSecondary(context),
+                                fontSize: 13,
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Watch ads to earn $_coinsPerVideo coins per video',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 14,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 24),
-                  
+                  const SizedBox(height: 16),
+
                   // Progress Card
                   Container(
                     padding: const EdgeInsets.all(20),
@@ -601,57 +593,80 @@ class _WatchVideosScreenState extends State<WatchVideosScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  
-                  // Watch Video Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: (_videosWatchedToday >= _dailyVideoLimit && 
-                                  _cooldownUntil != null && 
-                                  _cooldownUntil!.isAfter(DateTime.now())) 
-                          ? null 
-                          : (_isAdLoaded ? _watchVideo : null),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: (_videosWatchedToday >= _dailyVideoLimit && 
-                                          _cooldownUntil != null && 
-                                          _cooldownUntil!.isAfter(DateTime.now()))
-                            ? Colors.grey
-                            : const Color(0xFFF39C12),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: _isAdLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : (_videosWatchedToday >= _dailyVideoLimit && 
-                             _cooldownUntil != null && 
-                             _cooldownUntil!.isAfter(DateTime.now()))
-                              ? const Text(
-                                  'Daily Limit Reached',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
+                  const SizedBox(height: 12),
+
+                  // Watch Video Button (loads Google rewarded ad)
+                  ValueListenableBuilder<bool>(
+                    valueListenable: GoogleMobileAdsService.instance.rewardedReadyNotifier,
+                    builder: (context, isRewardedReady, _) {
+                      final isDailyLimitLocked =
+                          _videosWatchedToday >= _dailyVideoLimit &&
+                          _cooldownUntil != null &&
+                          _cooldownUntil!.isAfter(DateTime.now());
+                      final isEnabled = !isDailyLimitLocked && isRewardedReady;
+
+                      return SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: isEnabled ? _watchVideo : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isDailyLimitLocked
+                                ? Colors.grey
+                                : const Color(0xFFF39C12),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 18),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: _isAdLoading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                   ),
                                 )
-                              : const Text(
-                                  'Watch Video & Earn $_coinsPerVideo Coins',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                    ),
+                              : isDailyLimitLocked
+                                  ? const Text(
+                                      'Daily Limit Reached',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    )
+                                  : !isRewardedReady
+                                      ? const Text(
+                                          'Ad is loading...',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Watch Video & Earn $_coinsPerVideo Coins',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                        ),
+                      );
+                    },
                   ),
+                  const SizedBox(height: 20),
+
+                  // Native ad (bottom section)
+                  if (_nativeLoaded && _nativeAd != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: SizedBox(
+                        height: 280,
+                        width: double.infinity,
+                        child: AdWidget(ad: _nativeAd!),
+                      ),
+                    ),
                 ],
               ),
             ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+import '../../core/services/task_completion_ads_service.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
@@ -25,14 +25,7 @@ class _CaptchaScreenState extends State<CaptchaScreen> {
   String _rewardType = 'Coins';
   bool _isLoadingProgress = true;
   
-  // AdMob Configuration
-  static const String _rewardedAdUnitId = 'ca-app-pub-4532355113190688/5923175121';
-  RewardedAd? _rewardedAd;
-  bool _isAdLoaded = false;
-  bool _isAdLoading = false;
-  
-  // Track captcha count for alternating ads pattern (1st = Ads, 2nd & 3rd = Skip, 4th = Ads, etc.)
-  int _captchaCount = 0; // Track total captchas solved
+  int _captchaCount = 0;
   
   // Store captcha input for after ads
   String _pendingCaptchaInput = '';
@@ -41,59 +34,8 @@ class _CaptchaScreenState extends State<CaptchaScreen> {
   void initState() {
     super.initState();
     _loadCaptchaCount();
-    _initializeAds();
     _fetchCaptcha();
     _fetchProgress();
-  }
-
-  void _initializeAds() {
-    MobileAds.instance.initialize().then((status) {
-      _loadRewardedAd();
-    });
-  }
-
-  void _loadRewardedAd() {
-    if (_isAdLoading) return;
-    
-    setState(() {
-      _isAdLoading = true;
-      _isAdLoaded = false;
-    });
-
-    RewardedAd.load(
-      adUnitId: _rewardedAdUnitId,
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (RewardedAd ad) {
-          setState(() {
-            _rewardedAd = ad;
-            _isAdLoaded = true;
-            _isAdLoading = false;
-          });
-          
-          _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
-            onAdDismissedFullScreenContent: (RewardedAd ad) {
-              ad.dispose();
-              _rewardedAd = null;
-              _isAdLoaded = false;
-              _loadRewardedAd();
-            },
-            onAdFailedToShowFullScreenContent: (RewardedAd ad, AdError error) {
-              ad.dispose();
-              _rewardedAd = null;
-              _isAdLoaded = false;
-              _loadRewardedAd();
-            },
-          );
-        },
-        onAdFailedToLoad: (LoadAdError error) {
-          setState(() {
-            _isAdLoading = false;
-            _isAdLoaded = false;
-          });
-        },
-      ),
-    );
   }
 
   Future<void> _loadCaptchaCount() async {
@@ -110,79 +52,8 @@ class _CaptchaScreenState extends State<CaptchaScreen> {
     });
   }
 
-  // Check if current captcha should show ad (pattern: 1 Ads + 2 Skip)
-  // 1st = Ads, 2nd & 3rd = Skip, 4th = Ads, 5th & 6th = Skip, etc.
-  bool _shouldShowAd() {
-    // Pattern: count % 3 == 0 means show ad (1st, 4th, 7th, etc.)
-    return (_captchaCount % 3 == 0);
-  }
-
-  void _showRewardedAd({required VoidCallback onAdWatched}) async {
-    // If ad is not loaded, try to load it first
-    if (!_isAdLoaded && !_isAdLoading) {
-      _loadRewardedAd();
-      // Wait for ad to load (with timeout)
-      int waitCount = 0;
-      while (!_isAdLoaded && waitCount < 30 && mounted) {
-        await Future.delayed(const Duration(milliseconds: 200));
-        waitCount++;
-      }
-    }
-    
-    if (_rewardedAd != null && _isAdLoaded) {
-      // Ad is loaded and ready, show it
-      _rewardedAd!.show(
-        onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
-          // User watched ad, proceed with captcha processing
-          onAdWatched();
-        },
-      );
-    } else {
-      // Ad not loaded, show loading message and wait
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Loading ad... Please wait'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
-        
-        // Try to load ad and wait
-        if (!_isAdLoading) {
-          _loadRewardedAd();
-        }
-        
-        // Wait for ad to load (with timeout)
-        int waitCount = 0;
-        while (!_isAdLoaded && waitCount < 30 && mounted) {
-          await Future.delayed(const Duration(milliseconds: 200));
-          waitCount++;
-        }
-        
-        // If ad loaded, show it
-        if (_rewardedAd != null && _isAdLoaded && mounted) {
-          _rewardedAd!.show(
-            onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
-              onAdWatched();
-            },
-          );
-        } else {
-          // Ad still not ready after waiting, proceed anyway
-          if (mounted) {
-            onAdWatched();
-          }
-        }
-      } else {
-        // Not mounted, but still proceed
-        onAdWatched();
-      }
-    }
-  }
-
   @override
   void dispose() {
-    _rewardedAd?.dispose();
     _captchaController.dispose();
     super.dispose();
   }
@@ -261,23 +132,8 @@ class _CaptchaScreenState extends State<CaptchaScreen> {
       return;
     }
 
-    // Store captcha input for after ads
     _pendingCaptchaInput = captchaInput;
-
-    // Check if we should show ad based on alternating pattern
-    // Pattern: 1st = Ads, 2nd & 3rd = Skip, 4th = Ads, 5th & 6th = Skip, etc.
-    if (_shouldShowAd()) {
-      // Show rewarded ad (for 1st, 4th, 7th, etc.)
-      _showRewardedAd(
-        onAdWatched: () {
-          // After ad is watched, process captcha and give coins
-          _processCaptchaAndAwardCoins();
-        },
-      );
-    } else {
-      // Skip ad (for 2nd, 3rd, 5th, 6th, etc.) - directly process captcha
-      _processCaptchaAndAwardCoins();
-    }
+    _processCaptchaAndAwardCoins();
   }
 
   Future<void> _processCaptchaAndAwardCoins() async {
@@ -323,7 +179,14 @@ class _CaptchaScreenState extends State<CaptchaScreen> {
         _fetchCaptcha();
 
         if (mounted) {
-          _showCoinRewardPopup(earnedCoins);
+          TaskCompletionAdsService.instance.runAfterTaskCompleted(
+            () {
+              if (mounted) {
+                _showCoinRewardPopup(earnedCoins);
+              }
+            },
+            taskType: 'Captcha',
+          );
         }
       } else {
         if (mounted) {

@@ -4,13 +4,13 @@ import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
 import '../../widgets/home/header_widget.dart';
 import '../../widgets/home/balance_card.dart';
-import '../../widgets/home/hot_offers_section.dart';
 import '../../widgets/home/earn_money_section.dart';
 import '../../widgets/home/quick_actions_row.dart'; // New Import
 import '../../widgets/home/leaderboard_section.dart';
-import '../../widgets/home/watch_videos_card.dart';
+import '../../widgets/home/popup_template_dialog.dart';
 import '../../widgets/signup_bonus_popup.dart';
 import '../../screens/auth/login_screen.dart';
+import '../../core/models/popup_template_public.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,6 +20,15 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  /// Persistent flag — once the popup has been shown to the user one time,
+  /// the value `'1'` is written here and the dialog will never appear again
+  /// on this device (regardless of how many times the app is opened, the
+  /// user logs out and back in, or the popup template changes on the
+  /// server).
+  static const String _popupShownOnceKey = 'home_popup_template_shown_once';
+
+  bool _popupCheckInFlight = false;
+
   double _walletBalance = 0.0;
   int _coins = 0;
   bool _isLoading = true;
@@ -28,7 +37,76 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _fetchWalletBalance();
-    _checkAndShowSignupBonus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _runHomePopupsSequentially();
+    });
+  }
+
+  Future<void> _runHomePopupsSequentially() async {
+    if (_popupCheckInFlight) return;
+    _popupCheckInFlight = true;
+    try {
+      await _checkAndShowSignupBonus();
+      if (!mounted) return;
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return;
+      await _checkAndShowPopupTemplate();
+    } finally {
+      _popupCheckInFlight = false;
+    }
+  }
+
+  Future<void> _checkAndShowPopupTemplate() async {
+    // Show the popup ONLY the very first time the user lands on the home
+    // screen on this device. Subsequent app launches must never see it.
+    final alreadyShown =
+        await StorageService.getString(_popupShownOnceKey);
+    if (alreadyShown == '1') {
+      debugPrint('Popup template skipped — already shown once on this device');
+      return;
+    }
+
+    try {
+      final result = await ApiService.getPopupTemplatePublic();
+      if (!mounted) return;
+      if (result['success'] != true) {
+        debugPrint(
+          'Popup template skipped — API non-success: ${result['message']}',
+        );
+        return;
+      }
+
+      final raw = result['data'];
+      if (raw is! Map) {
+        debugPrint('Popup template skipped — data is not a Map: $raw');
+        return;
+      }
+
+      final template = PopupTemplatePublic.fromJson(
+        Map<String, dynamic>.from(raw),
+      );
+      if (!template.shouldShow) {
+        debugPrint(
+          'Popup template skipped — shouldShow=false '
+          '(isActive=${template.isActive}, hasTitle=${template.title != null}, '
+          'hasBody=${template.body != null}, hasImage=${template.imageUrl != null})',
+        );
+        return;
+      }
+
+      // Mark as shown BEFORE awaiting the dialog so that even if the user
+      // backgrounds the app while the popup is open, we never show it twice.
+      await StorageService.saveString(_popupShownOnceKey, '1');
+
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (context) => PopupTemplateDialog(template: template),
+      );
+    } catch (e) {
+      debugPrint('Error fetching popup template: $e');
+    }
   }
 
   Future<void> _checkAndShowSignupBonus() async {
@@ -58,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
         
         // Show the popup
         if (mounted) {
-          showDialog(
+          await showDialog<void>(
             context: context,
             barrierDismissible: false,
             builder: (context) => SignupBonusPopup(
@@ -236,18 +314,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   // Quick Actions Row (Claim Bonus, Daily Deals, Refer & Earn)
                   const QuickActionsRow(),
-                  const SizedBox(height: 24),
-
-                  // Watch Videos
-                  const WatchVideosCard(),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
 
                   // Leaderboard Section
                   const LeaderboardSection(),
-                  const SizedBox(height: 24),
-
-                  // Hot Offers Section
-                  const HotOffersSection(),
                   const SizedBox(height: 24),
 
                   // Earn Money Section
@@ -262,3 +332,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import 'package:intl/intl.dart' as intl;
-import 'package:google_mobile_ads/google_mobile_ads.dart';
-import '../../core/constants/app_colors.dart';
+import '../../core/services/task_completion_ads_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/storage_service.dart';
 import '../../widgets/coin_reward_popup.dart';
@@ -32,15 +30,7 @@ class _SpinWheelScreenState extends State<SpinWheelScreen>
   int _totalSpins = 0;
   bool _isStatusLoading = true;
   
-  // AdMob Configuration for alternating ads pattern
-  static const String _rewardedAdUnitId = 'ca-app-pub-4532355113190688/5923175121';
-  RewardedAd? _rewardedAd;
-  bool _isAdLoaded = false;
-  bool _isAdLoading = false;
-  
-  // Track spin count for alternating ads pattern (1st = Ads, 2nd = Skip, 3rd = Ads, etc.)
-  int _spinCount = 0; // Track total spins
-  int? _currentSpinCountForAd = null; // Store count for current spin's ad check
+  int _spinCount = 0;
   
   final List<WheelSegment> _segments = [
     WheelSegment(value: '5', color: const Color(0xFF81C784), text: '5 Coins'), // Light Green
@@ -78,82 +68,14 @@ class _SpinWheelScreenState extends State<SpinWheelScreen>
     });
 
     _loadSpinCount();
-    _initializeAds();
     _fetchWalletBalance();
     _fetchDailySpinStatus();
   }
 
   @override
   void dispose() {
-    _rewardedAd?.dispose();
     _controller.dispose();
     super.dispose();
-  }
-
-  void _initializeAds() {
-    MobileAds.instance.initialize().then((status) {
-      _loadRewardedAd();
-    });
-  }
-
-  void _loadRewardedAd() {
-    if (_isAdLoading) return;
-    
-    setState(() {
-      _isAdLoading = true;
-      _isAdLoaded = false;
-    });
-
-    RewardedAd.load(
-      adUnitId: _rewardedAdUnitId,
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (RewardedAd ad) {
-          if (mounted) {
-            setState(() {
-              _rewardedAd = ad;
-              _isAdLoaded = true;
-              _isAdLoading = false;
-            });
-            
-            _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
-              onAdDismissedFullScreenContent: (RewardedAd ad) {
-                ad.dispose();
-                if (mounted) {
-                  setState(() {
-                    _rewardedAd = null;
-                    _isAdLoaded = false;
-                  });
-                  _loadRewardedAd();
-                }
-              },
-              onAdFailedToShowFullScreenContent: (RewardedAd ad, AdError error) {
-                ad.dispose();
-                if (mounted) {
-                  setState(() {
-                    _rewardedAd = null;
-                    _isAdLoaded = false;
-                  });
-                  Future.delayed(const Duration(seconds: 2), () {
-                    if (mounted) {
-                      _loadRewardedAd();
-                    }
-                  });
-                }
-              },
-            );
-          }
-        },
-        onAdFailedToLoad: (LoadAdError error) {
-          if (mounted) {
-            setState(() {
-              _isAdLoading = false;
-              _isAdLoaded = false;
-            });
-          }
-        },
-      ),
-    );
   }
 
   Future<void> _loadSpinCount() async {
@@ -168,82 +90,6 @@ class _SpinWheelScreenState extends State<SpinWheelScreen>
     setState(() {
       _spinCount = count;
     });
-  }
-
-  // Check if current spin should show ad when "Add Wallet" button is clicked
-  // Pattern: 1 Ads + 1 Skip
-  // 1st spin = Ads, 2nd = Skip, 3rd = Ads, 4th = Skip, 5th = Ads, etc.
-  bool _shouldShowAd() {
-    // Count 0 (1st spin) → Show Ad
-    // Count 1 (2nd spin) → Skip (No Ads)
-    // Count 2 (3rd spin) → Show Ad
-    // Count 3 (4th spin) → Skip (No Ads)
-    // Count 4 (5th spin) → Show Ad
-    // Pattern: count % 2 == 0 means show ad (1st, 3rd, 5th...)
-    return (_spinCount % 2 == 0);
-  }
-
-  void _showRewardedAd({required VoidCallback onAdWatched}) async {
-    // If ad is not loaded, try to load it first
-    if (!_isAdLoaded && !_isAdLoading) {
-      _loadRewardedAd();
-      // Wait for ad to load (with timeout)
-      int waitCount = 0;
-      while (!_isAdLoaded && waitCount < 30 && mounted) {
-        await Future.delayed(const Duration(milliseconds: 200));
-        waitCount++;
-      }
-    }
-    
-    if (_rewardedAd != null && _isAdLoaded) {
-      // Ad is loaded and ready, show it
-      _rewardedAd!.show(
-        onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
-          // User watched ad, proceed with spin
-          onAdWatched();
-        },
-      );
-    } else {
-      // Ad not loaded, show loading message and wait
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Loading ad... Please wait'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
-        
-        // Try to load ad and wait
-        if (!_isAdLoading) {
-          _loadRewardedAd();
-        }
-        
-        // Wait for ad to load (with timeout)
-        int waitCount = 0;
-        while (!_isAdLoaded && waitCount < 30 && mounted) {
-          await Future.delayed(const Duration(milliseconds: 200));
-          waitCount++;
-        }
-        
-        // If ad loaded, show it
-        if (_rewardedAd != null && _isAdLoaded && mounted) {
-          _rewardedAd!.show(
-            onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
-              onAdWatched();
-            },
-          );
-        } else {
-          // Ad still not ready after waiting, proceed anyway
-          if (mounted) {
-            onAdWatched();
-          }
-        }
-      } else {
-        // Not mounted, but still proceed
-        onAdWatched();
-      }
-    }
   }
 
   String _formatCurrency(double amount) {
@@ -407,9 +253,6 @@ class _SpinWheelScreenState extends State<SpinWheelScreen>
     
     // Call the API to record usage immediately when spin starts
     
-    // Store current count for ad check (before incrementing)
-    _currentSpinCountForAd = _spinCount;
-    
     // Increment spin count after starting spin
     final newCount = _spinCount + 1;
     _saveSpinCount(newCount);
@@ -459,40 +302,22 @@ class _SpinWheelScreenState extends State<SpinWheelScreen>
     }
     
     if (!mounted) return;
-    
-    // Use the stored count for ad pattern check (from when spin started)
-    final countForAdCheck = _currentSpinCountForAd ?? _spinCount;
-    
-    // Show coin reward popup with ad logic
-    _showCoinRewardPopup(winningAmount, countForAdCheck);
+
+    TaskCompletionAdsService.instance.runAfterTaskCompleted(
+      () {
+        if (!mounted) return;
+        _showCoinRewardPopup(winningAmount);
+      },
+      taskType: 'DailySpin',
+    );
   }
 
-  void _showCoinRewardPopup(int coins, int countForAdCheck) {
+  void _showCoinRewardPopup(int coins) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return CoinRewardPopup(
-          coins: coins,
-          onGreatButtonClick: () {
-            // Check if we should show ad based on alternating pattern when "Add Wallet" button is clicked
-            // Pattern: 1 Ads + 1 Skip
-            // 1st = Ads, 2nd = Skip, 3rd = Ads, 4th = Skip, 5th = Ads, etc.
-            // Use the count before increment (countForAdCheck)
-            final shouldShowAd = (countForAdCheck % 2 == 0);
-            
-            if (shouldShowAd) {
-              // Show rewarded ad (for 1st, 3rd, 5th, etc.)
-              _showRewardedAd(
-                onAdWatched: () {
-                  // Ad watched, popup will be closed by the button click handler
-                },
-              );
-            } else {
-              // Skip ad (for 2nd, 4th, 6th, etc.) - popup will close normally without ads
-            }
-          },
-        );
+        return CoinRewardPopup(coins: coins);
       },
     );
   }

@@ -1,8 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/constants/ad_config.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/google_mobile_ads_service.dart';
 import '../../core/services/storage_service.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -27,16 +31,68 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   final _scrollController = ScrollController();
 
+  NativeAd? _nativeAd;
+  bool _nativeLoaded = false;
+
+  bool get _showNativeSlot =>
+      _events.isNotEmpty && _nativeLoaded && _nativeAd != null;
+
+  int get _historyListItemCount =>
+      _events.length + (_showNativeSlot ? 1 : 0);
+
   @override
   void initState() {
     super.initState();
     _fetchHistory(initial: true);
     _scrollController.addListener(_onScroll);
+    _loadNativeAd();
+  }
+
+  void _loadNativeAd() {
+    if (!GoogleMobileAdsService.instance.bannerAndNativeAdsEnabled) {
+      return;
+    }
+    if (kDebugMode) {
+      _nativeAd = NativeAd(
+        adUnitId: AdConfig.nativeAdUnitId,
+        listener: NativeAdListener(
+          onAdLoaded: (_) {
+            if (mounted) setState(() => _nativeLoaded = true);
+          },
+          onAdFailedToLoad: (ad, error) {
+            debugPrint('Native ad failed: ${error.message}');
+            ad.dispose();
+          },
+        ),
+        request: const AdRequest(),
+        nativeTemplateStyle: NativeTemplateStyle(
+          templateType: TemplateType.medium,
+        ),
+      )..load();
+    } else {
+      _nativeAd = NativeAd.fromAdManagerRequest(
+        adUnitId: AdConfig.nativeUnitId,
+        listener: NativeAdListener(
+          onAdLoaded: (_) {
+            if (mounted) setState(() => _nativeLoaded = true);
+          },
+          onAdFailedToLoad: (ad, error) {
+            debugPrint('Native ad (Ad Manager) failed: ${error.message}');
+            ad.dispose();
+          },
+        ),
+        adManagerRequest: const AdManagerAdRequest(),
+        nativeTemplateStyle: NativeTemplateStyle(
+          templateType: TemplateType.medium,
+        ),
+      )..load();
+    }
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _nativeAd?.dispose();
     super.dispose();
   }
 
@@ -160,14 +216,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
         centerTitle: true,
       ),
       body: RefreshIndicator(
+        color: AppColors.primary,
         onRefresh: () => _fetchHistory(initial: true),
         child: Column(
           children: [
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             _buildTotalsCard(context),
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
             _buildFiltersRow(context),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
+            if (!_isLoading && _events.isNotEmpty)
+              _buildSectionHeader(context),
             Expanded(
               child: _isLoading
                   ? const Center(
@@ -183,13 +242,41 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
+  Widget _buildSectionHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Recent activity',
+            style: TextStyle(
+              color: AppColors.textSecondary(context),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.4,
+            ),
+          ),
+          Text(
+            '${_events.length} item${_events.length == 1 ? '' : 's'}',
+            style: TextStyle(
+              color: AppColors.textSecondary(context).withOpacity(0.7),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTotalsCard(BuildContext context) {
     final totals = _totals;
     if (totals == null) {
       return const SizedBox.shrink();
     }
 
-    final totalCoins = totals['totalCoinsChange'] ?? 0;
+    final totalCoins = (totals['totalCoinsChange'] ?? 0) as num;
     final totalWallet = (totals['totalWalletChange'] ?? 0).toDouble();
     final currentCoins = totals['currentCoins'] ?? 0;
     final currentWallet = (totals['currentWalletBalance'] ?? 0).toDouble();
@@ -204,40 +291,57 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
       child: Container(
-        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground(context),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: AppColors.cardShadow(context),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.primary.withOpacity(0.18),
+              AppColors.cardBackground(context),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: AppColors.primary.withOpacity(0.18),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withOpacity(0.08),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
+        padding: const EdgeInsets.all(16),
         child: Row(
           children: [
             _buildTotalsColumn(
+              icon: Icons.monetization_on_rounded,
+              iconColor: AppColors.amber,
               title: 'Coins',
-              primary: '$currentCoins',
-              secondary:
-                  (totalCoins >= 0 ? '+$totalCoins' : '$totalCoins') + ' today',
-              primaryColor: Colors.white,
-              secondaryColor:
-                  totalCoins >= 0 ? AppColors.green : Colors.redAccent,
+              primary: NumberFormat.decimalPattern('en_IN')
+                  .format((currentCoins is num ? currentCoins : 0).toInt()),
+              deltaText:
+                  '${totalCoins >= 0 ? '+' : ''}$totalCoins today',
+              isPositive: totalCoins >= 0,
             ),
-            const SizedBox(width: 16),
             Container(
               width: 1,
-              height: 40,
-              color: AppColors.borderLight(context),
+              height: 56,
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+              color: AppColors.borderLight(context).withOpacity(0.6),
             ),
-            const SizedBox(width: 16),
             _buildTotalsColumn(
+              icon: Icons.account_balance_wallet_rounded,
+              iconColor: AppColors.primary,
               title: 'Wallet',
               primary: formatCurrency(currentWallet),
-              secondary:
-                  (totalWallet >= 0 ? '+${totalWallet.toStringAsFixed(2)}' : totalWallet.toStringAsFixed(2)),
-              primaryColor: Colors.white,
-              secondaryColor:
-                  totalWallet >= 0 ? AppColors.green : Colors.redAccent,
+              deltaText:
+                  '${totalWallet >= 0 ? '+' : ''}₹${totalWallet.abs().toStringAsFixed(2)}',
+              isPositive: totalWallet >= 0,
             ),
           ],
         ),
@@ -246,40 +350,78 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildTotalsColumn({
+    required IconData icon,
+    required Color iconColor,
     required String title,
     required String primary,
-    required String secondary,
-    required Color primaryColor,
-    required Color secondaryColor,
+    required String deltaText,
+    required bool isPositive,
   }) {
+    final deltaColor = isPositive ? AppColors.green : Colors.redAccent;
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: iconColor, size: 16),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  color: AppColors.textSecondary(context),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           Text(
-            title,
-            style: TextStyle(
-              color: AppColors.textSecondary(context),
-              fontSize: 12,
+            primary,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            primary,
-            style: TextStyle(
-              color: primaryColor,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            secondary,
-            style: TextStyle(
-              color: secondaryColor,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
+          Row(
+            children: [
+              Icon(
+                isPositive
+                    ? Icons.arrow_upward_rounded
+                    : Icons.arrow_downward_rounded,
+                size: 12,
+                color: deltaColor,
+              ),
+              const SizedBox(width: 2),
+              Flexible(
+                child: Text(
+                  deltaText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: deltaColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -288,17 +430,37 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _buildFiltersRow(BuildContext context) {
     const types = [
-      {'label': 'All', 'value': null},
-      {'label': 'Scratch Cards', 'value': 'SCRATCH_CARD'},
-      {'label': 'Daily Limit', 'value': 'SCRATCH_CARD_DAILY_LIMIT'},
-      {'label': 'Captcha', 'value': 'CAPTCHA'},
-      {'label': 'App Installs', 'value': 'APP_INSTALL'},
-      {'label': 'Withdrawals', 'value': 'WITHDRAWAL'},
-      {'label': 'Conversions', 'value': 'COIN_CONVERSION'},
+      {'label': 'All', 'value': null, 'icon': Icons.all_inclusive_rounded},
+      {
+        'label': 'Scratch Cards',
+        'value': 'SCRATCH_CARD',
+        'icon': Icons.card_giftcard_rounded,
+      },
+      {
+        'label': 'Daily Limit',
+        'value': 'SCRATCH_CARD_DAILY_LIMIT',
+        'icon': Icons.calendar_month_rounded,
+      },
+      {'label': 'Captcha', 'value': 'CAPTCHA', 'icon': Icons.keyboard_rounded},
+      {
+        'label': 'App Installs',
+        'value': 'APP_INSTALL',
+        'icon': Icons.download_rounded,
+      },
+      {
+        'label': 'Withdrawals',
+        'value': 'WITHDRAWAL',
+        'icon': Icons.outbox_rounded,
+      },
+      {
+        'label': 'Conversions',
+        'value': 'COIN_CONVERSION',
+        'icon': Icons.currency_exchange_rounded,
+      },
     ];
 
     return SizedBox(
-      height: 40,
+      height: 44,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         scrollDirection: Axis.horizontal,
@@ -306,27 +468,82 @@ class _HistoryScreenState extends State<HistoryScreen> {
           final item = types[index];
           final label = item['label'] as String;
           final value = item['value'] as String?;
-          final isSelected = _selectedType == value || (value == null && _selectedType == null);
+          final icon = item['icon'] as IconData;
+          final isSelected =
+              _selectedType == value || (value == null && _selectedType == null);
 
-          return ChoiceChip(
-            label: Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : AppColors.textSecondary(context),
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              gradient: isSelected
+                  ? LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppColors.primary,
+                        AppColors.primary.withOpacity(0.75),
+                      ],
+                    )
+                  : null,
+              color: isSelected ? null : AppColors.cardBackgroundLight(context),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: isSelected
+                    ? AppColors.primary
+                    : AppColors.borderLight(context).withOpacity(0.6),
+                width: 1,
+              ),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.35),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(22),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(22),
+                onTap: () => _changeFilter(value),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 14,
+                        color: isSelected
+                            ? Colors.white
+                            : AppColors.textSecondary(context),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          color: isSelected
+                              ? Colors.white
+                              : AppColors.textSecondary(context),
+                          fontSize: 12,
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            selected: isSelected,
-            selectedColor: AppColors.primary,
-            backgroundColor: AppColors.cardBackgroundLight(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: BorderSide(
-                color: isSelected ? AppColors.primary : AppColors.borderLight(context),
-              ),
-            ),
-            onSelected: (_) => _changeFilter(value),
           );
         },
         separatorBuilder: (context, index) => const SizedBox(width: 8),
@@ -337,30 +554,54 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _buildEmptyState(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.history_toggle_off_rounded,
-              size: 64, color: Colors.grey.shade700),
-          const SizedBox(height: 12),
-          const Text(
-            'No history yet',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.primary.withOpacity(0.18),
+                    AppColors.primary.withOpacity(0.04),
+                  ],
+                ),
+                border: Border.all(
+                  color: AppColors.primary.withOpacity(0.25),
+                  width: 1,
+                ),
+              ),
+              child: Icon(
+                Icons.history_toggle_off_rounded,
+                size: 44,
+                color: AppColors.primary,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Start playing games, installing apps,\n or withdrawing to see history here.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.textSecondary(context),
-              fontSize: 12,
+            const SizedBox(height: 18),
+            const Text(
+              'No history yet',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 6),
+            Text(
+              'Play games, complete tasks, or make a withdrawal — your activity will appear here.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textSecondary(context),
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -372,9 +613,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
           child: ListView.builder(
             controller: _scrollController,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            itemCount: _events.length,
+            itemCount: _historyListItemCount,
             itemBuilder: (context, index) {
-              final event = _events[index];
+              if (_showNativeSlot && index == 1) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: SizedBox(
+                    height: 280,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: AdWidget(ad: _nativeAd!),
+                    ),
+                  ),
+                );
+              }
+              final eventIndex =
+                  _showNativeSlot && index > 1 ? index - 1 : index;
+              final event = _events[eventIndex];
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _buildHistoryCard(context, event),
